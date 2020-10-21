@@ -1,0 +1,70 @@
+.param-editor {
+  padding: 5px;
+
+  &:before {
+    content: "";
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  > * {
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  label {
+    text-align: right;
+    margin-right: 10px;
+  }
+
+  .slider-val {
+    text-align: left;
+  }
+
+  .accordion-button {
+    display: block;
+    background: #eee;
+    border: none;
+    outline: none;
+    width: 500px;
+    padding: 10px;
+    cursor: pointer;
+    text-align: left;
+
+    $select-color: #ccc;
+
+    &:hover {
+      background: $select-color;
+    }
+
+    &.active {
+      background: $select-color;
+
+      // caret icon
+      &:after {
+        content: "▲"; /* "-" unicode */
+      }
+    }
+
+    // caret icon
+    &:after {
+      content: "▼"; //"\02795"; /* "+" unicode */
+      font-size: 13px;
+      color: #777;
+      float: right;
+      margin-left: 5px;
+    }
+  }
+
+  .accordion-panel {
+    padding: 0 18px;
+    background-color: white;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+
+    &.active {
+      max-height: 400px;
+    }
+  }
+}
