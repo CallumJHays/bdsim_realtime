@@ -365,7 +365,6 @@ class VecParamEditor extends CollapsibleParamEditor<VecParam> {
   setup_panel(panel: D3Div) {
     const { val, name, min, max, log_scale, step } = this.param;
     for (let idx = 0; idx < this.param.val.length; idx++) {
-      // panel.append("br");
       panel.append(() =>
         new NumParamEditor(
           {
