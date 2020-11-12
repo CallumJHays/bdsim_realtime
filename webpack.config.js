@@ -5,7 +5,7 @@ const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 
 module.exports = {
   mode: "development",
-  entry: "./frontend/index.ts",
+  entry: "./frontend/index.tsx",
   devtool: "inline-source-map",
   devServer: {
     contentBase: "./dist",
@@ -15,10 +15,10 @@ module.exports = {
       {
         test: /\.tsx?$/,
         use: "ts-loader",
-        exclude: /node_modules/,
+        exclude: /(node_modules|vendor)/,
       },
       {
-        test: /\.html$/i,
+        test: /\.(html|png|jpe?g|gif)$/i,
         use: [
           {
             loader: "file-loader",
@@ -28,8 +28,9 @@ module.exports = {
           },
         ],
       },
+
       {
-        test: /\.s[ac]ss$/i,
+        test: /\.s?[ac]ss$/i,
         use: [
           // Creates `style` nodes from JS strings
           "style-loader",
@@ -43,6 +44,13 @@ module.exports = {
   },
   resolve: {
     extensions: [".tsx", ".ts", ".js"],
+
+    alias: {
+      react: "preact/compat",
+      "react-dom/test-utils": "preact/test-utils",
+      "react-dom": "preact/compat",
+      // Must be below test-utils
+    },
   },
   output: {
     filename: "bundle.js",

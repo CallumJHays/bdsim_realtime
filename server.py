@@ -1,14 +1,11 @@
 import asyncio
 from asyncio import StreamReader, StreamWriter
-import os
-import websockets
-import json
-from collections import namedtuple
 import msgpack
 from sanic import Sanic, response
+from sanic.websocket import WebSocketCommonProtocol as WebSocket
 from pathlib import Path
 import argparse
-import pdb
+from typing import Dict, Set
 
 HERE = Path(__file__).parent
 
@@ -16,15 +13,14 @@ app = Sanic(__name__)
 
 
 class RemoteBDSimNode:
-    def __init__(self, reader, writer, ws_subs, param_defs):
+    def __init__(self, reader: StreamReader, writer: StreamWriter, ws_subs: Set[WebSocket], param_defs):
         self.reader = reader
         self.writer = writer
         self.ws_subs = ws_subs
         self.param_defs = param_defs
 
-
-tcp_clients = {}  # { RemoteBDSimNode: peername }
-ws_clients = {}  # { websocket.send: RemoteBDSimNode }
+tcp_clients = {}  # { url: RemoteBDSimNode }
+ws_clients = {} # { WebSocket: RemoteBDSimNode}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--host',
@@ -39,55 +35,60 @@ args = parser.parse_args()
 
 
 @app.websocket('/ws')
-async def ws(req, ws):
+async def ws(req, ws: WebSocket):
     chosen_node = None
     print("got ws client", ws)
-    send = ws.send
-    ws_clients[send] = None
+    ws_clients[ws] = None
 
     try:
         # let client know which nodes are available
-        await send(available_nodes_message())
+        await send_msg(available_nodes_message(), ws)
         print("sent available nodes")
 
         while True:
             print('waiting for ws message')
-            new_msg = await ws.recv()
-            print("got ws message", new_msg)
-            try:
-                # this should happen first, can messages shouldn't tranceive until so
-                jason = json.loads(new_msg)
-                print('got json', jason)
-                chosen_node_peername = jason["chosenNode"]
+            msg, raw = await recv_msg(ws)
+            print("got ws message", msg)
+
+            # if this is just the client choosing a new node
+            if isinstance(msg, dict) and 'chosenNode' in msg:
+                chosen_node_peername = msg["chosenNode"]
 
                 old_chosen_node = chosen_node
                 if chosen_node_peername == "None":
                     chosen_node = None
                 else:
-                    chosen_node = next(
-                        client for peername, client in tcp_clients.items()
-                        if peername == chosen_node_peername)
+                    chosen_node = tcp_clients[chosen_node_peername]
 
                 # only reconnect if it's changed
                 if chosen_node != old_chosen_node:
                     # disconnect and reconnect to newly chosen node
-                    ws_disconnect(send)
-                    ws_clients[send] = chosen_node
+                    ws_disconnect(ws)
+                    ws_clients[ws] = chosen_node
                     if chosen_node:
-                        ws_clients[send].ws_subs.add(send)
+                        ws_clients[ws].ws_subs.add(ws)
 
-                        # send the param definitions
-                        await send(msgpack.packb(chosen_node.param_defs))
+                        # send the current param definitions
+                        # TODO: update these param definitions according to client-node comms
+                        await send_msg(chosen_node.param_defs, ws)
 
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                print("sending to ", chosen_node_peername)
-                chosen_node.writer.write(new_msg)
+            else: # send it directly to the node
+                # TODO: update these chosen_node.param_defs according to client-node comms
+                chosen_node.writer.write(raw)
                 await chosen_node.writer.drain()
-                print("sent", new_msg)
+                print('proxied', msg, 'to chosen node', chosen_node)
 
     except asyncio.CancelledError:
-        print('got error')
-        ws_disconnect(send)
+        print('websocket', ws, 'disconnected')
+        ws_disconnect(ws)
+
+
+async def recv_msg(ws: WebSocket):
+    raw = await ws.recv()
+    return msgpack.unpackb(raw), raw
+
+async def send_msg(msg, ws: WebSocket):
+    return await ws.send(msgpack.packb(msg))
 
 
 @app.route('/')
@@ -98,16 +99,15 @@ async def index(req):
 app.static('/', 'dist')
 
 
-def ws_disconnect(ws_send):
-    if ws_clients[ws_send]:
-        print('disconnecting', ws_send)
-        pdb.set_trace()
-        ws_clients[ws_send].ws_subs.remove(ws_send)
-        del ws_clients[ws_send]
+def ws_disconnect(ws: WebSocket):
+    if ws_clients[ws]:
+        print('disconnecting', ws)
+        ws_clients[ws].ws_subs.remove(ws)
+        del ws_clients[ws]
 
 
 def available_nodes_message():
-    return json.dumps({"availableNodes": list(tcp_clients.keys())})
+    return {"availableNodes": list(tcp_clients.keys())}
 
 
 async def broadcast_available_nodes():
@@ -120,7 +120,7 @@ async def send_all_ws(clients, message):
     if any(clients):
         websockets = list(clients)
         results = await asyncio.gather(
-            *[send(message) for send in websockets],
+            *[ws.send(message) for ws in websockets],
             return_exceptions=True,
         )
 
@@ -133,7 +133,7 @@ async def send_all_ws(clients, message):
 async def handle_tcp_conn(reader: StreamReader, writer: StreamWriter):
     [ip, port] = writer.get_extra_info("peername")
     print('got new tcp client connection from', ip, port)
-    peername = f"{ip}:{port}"
+    peername = ip + ":" + str(port)
     ws_subs = set()
     msgs = msgpack.Unpacker()
 
@@ -151,15 +151,16 @@ async def handle_tcp_conn(reader: StreamReader, writer: StreamWriter):
                 print('got tcp message', msg)
                 await send_all_ws(ws_subs, msgpack.packb(msg))
 
+    # surely this is overkill. copied from example
     except asyncio.CancelledError:
-        print(f"Remote {peername} closing connection.")
+        print("Remote " + peername + " closing connection.")
         writer.close()
         await writer.wait_closed()
     except asyncio.IncompleteReadError:
-        print(f"Remote {peername} disconnected")
+        print("Remote " + peername + " closing connection.")
     finally:
         await broadcast_available_nodes()
-        print(f"Remote {peername} closed")
+        print("Remote " + peername + " closing connection.")
         del tcp_clients[peername]
 
 
@@ -169,9 +170,8 @@ async def tcp_server(*args, **kwargs):
         await server.serve_forever()
 
 
-print(f"TCP server: {args.host or args.tcp_host}:{args.tcp_port}")
+print("TCP server: " + str(args.host or args.tcp_host) + ":" + str(args.tcp_port))
 app.add_task(tcp_server(host=args.host or args.tcp_host, port=args.tcp_port))
 
 if __name__ == "__main__":
-    # TODO: omit debug
     app.run(host=args.host or args.app_host, port=args.app_port)

@@ -1,3 +1,31 @@
+$fg: #eee;
+$mg: #777;
+$bg: #222;
+
+body {
+  margin: 0;
+  font-family: Helvetica;
+  color: $fg;
+  background-color: $bg;
+}
+select {
+  margin: 5px 0 5px 20px;
+  width: 150px;
+  padding: 5px 35px 5px 5px;
+  border-radius: 5px;
+  font-size: 16px;
+  border: 1px solid $mg;
+  height: 30px;
+  appearance: none;
+  background: $bg;
+  color: $fg;
+}
+
+.stream-viewer {
+  max-width: 100%;
+  max-height: 100%;
+}
+
 .param-editor {
   padding: 5px;
 

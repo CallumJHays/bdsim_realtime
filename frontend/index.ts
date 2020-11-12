@@ -1,69 +1,32 @@
 import { encode, decode, decodeAsync } from "@msgpack/msgpack";
 import * as d3 from "d3";
-import { timeThursday } from "d3";
 import { sliderBottom } from "d3-simple-slider";
 
 import "./style.scss";
 
 const NO_CHOSEN_NODE = "None";
 
-type Param<T> = {
-  name: string;
-  id: number;
-  val: T;
-};
-
-type NumParam<T = number> = Param<T> & {
-  min: number;
-  max: number;
-  log_scale: boolean;
-  step?: number;
-};
-
-type VecParam = NumParam<number[]> & {
-  min: number[];
-  max: number[];
-};
-
-type EnumParam<T extends number | number[] | string | boolean> = Param<T> & {
-  oneof: T[];
-};
-
-// hyperparams do actually have a value, but we don't use it on the frontend
-type HyperParam = Param<null> & {
-  id: number;
-  params: { [attr: string]: AnyParam };
-  hidden: string[];
-};
-
-type AnyParam =
-  | Param<any>
-  | NumParam<number>
-  | VecParam
-  | EnumParam<any>
-  | HyperParam;
-
 const state: {
   availableNodes: string[];
   chosenNode: string;
   id2param: { [id: number]: AnyParam };
   id2paramEditor: { [id: number]: ParamEditor<AnyParam> };
+  telemLinks: string[];
 } = {
   availableNodes: [],
   chosenNode: NO_CHOSEN_NODE,
   id2param: {},
   id2paramEditor: {},
+  telemLinks: [],
 };
 
 const nodePicker = document.getElementById("nodes") as HTMLSelectElement;
 nodePicker.oninput = (e) =>
   setChosenNode((e.target as HTMLSelectElement).value);
 
-const container = d3.select("#tuner");
-
-const ws = new WebSocket(
-  "ws://" + document.domain + ":" + location.port + "/ws"
-);
+const interfaceDiv = d3.select("#interface");
+const telemetryLinks = d3.select("#telem");
+const tunerDiv = d3.select("#tuner");
 
 ws.onmessage = async ({ data }) => {
   try {
@@ -82,15 +45,13 @@ ws.onmessage = async ({ data }) => {
     }
   } catch (err) {
     if (err instanceof SyntaxError) {
-      const msg = await decodeFromBlob(data);
-      console.log("got binary data", msg);
+      const msg: any = await decodeFromBlob(data);
+      console.log("got msgpack msg", msg);
 
       // if we're awaiting param definitions
-      if (
-        state.chosenNode !== NO_CHOSEN_NODE &&
-        Object.keys(state.id2param).length === 0 // if there are no  params in the map currently
-      ) {
-        setParams(msg as AnyParam[]);
+      if ("params" in msg) {
+        setParams(msg["params"] as AnyParam[]);
+        setTelemLinks(msg["telemLinks"]);
       } else if (Array.isArray(msg)) {
         // gui reconstruction callback]
         const params = msg as AnyParam[];
@@ -138,7 +99,9 @@ function setParams(params: AnyParam[]) {
   state.id2param = {};
   updateID2Param(params);
 
-  container
+  interfaceDiv.style("display", params.length > 0 ? "block" : "none");
+
+  tunerDiv
     .selectAll("*")
     .remove()
     .data(params) // populate with new controls
@@ -158,19 +121,7 @@ function updateID2Param(params: AnyParam[]) {
 
 function createParamControl(param: AnyParam) {
   const editor =
-    "params" in param
-      ? new HyperParamEditor(param)
-      : "oneof" in param
-      ? new EnumParamEditor(param)
-      : "max" in param
-      ? typeof param.val === "number"
-        ? new NumParamEditor(param as NumParam<number>)
-        : new VecParamEditor(param as VecParam)
-      : typeof param.val === "boolean"
-      ? new BoolParamEditor(param)
-      : typeof param.val === "string"
-      ? new StringParamEditor(param)
-      : null;
+    
 
   if (!editor) {
     console.error(param);
@@ -268,7 +219,7 @@ class NumParamEditor extends ParamEditor<NumParam> {
     this.el
       .append("svg")
       .style("display", "inline-block")
-      .attr("width", 230)
+      .attr("width  ", 230)
       .attr("height", 47)
       .append("g")
       .attr("transform", "translate(12, 6)")
@@ -389,7 +340,7 @@ class VecParamEditor extends CollapsibleParamEditor<VecParam> {
 
 // from msgpack docs https://github.com/msgpack/msgpack-javascript#decoding-a-blob
 async function decodeFromBlob(blob: Blob) {
-  return decode(await blob.arrayBuffer());
+  return;
 }
 
 function formatNum(val: number) {
