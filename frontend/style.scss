@@ -8,9 +8,9 @@ body {
   color: $fg;
   background-color: $bg;
 }
+
 select {
   margin: 5px 0 5px 20px;
-  width: 150px;
   padding: 5px 35px 5px 5px;
   border-radius: 5px;
   font-size: 16px;
@@ -24,6 +24,11 @@ select {
 .stream-viewer {
   max-width: 100%;
   max-height: 100%;
+}
+
+.param-tuner {
+  height: 100%;
+  overflow-y: scroll;
 }
 
 .param-editor {
@@ -45,28 +50,30 @@ select {
     margin-right: 10px;
   }
 
-  .slider-val {
-    text-align: left;
+  .parameter-value text {
+    fill: white; // sets the 'currently chosen' value of d3-simple-slider
   }
 
-  .accordion-button {
+  .collapsible-button {
     display: block;
-    background: #eee;
+    background: $mg;
     border: none;
     outline: none;
-    width: 500px;
+    width: 100%;
+    max-width: 280px;
     padding: 10px;
     cursor: pointer;
     text-align: left;
+    color: $bg;
 
-    $select-color: #ccc;
+    $active-color: lighten($mg, 10);
 
     &:hover {
-      background: $select-color;
+      background: $active-color;
     }
 
     &.active {
-      background: $select-color;
+      background: $active-color;
 
       // caret icon
       &:after {
@@ -78,20 +85,19 @@ select {
     &:after {
       content: "▼"; //"\02795"; /* "+" unicode */
       font-size: 13px;
-      color: #777;
       float: right;
       margin-left: 5px;
     }
   }
 
-  .accordion-panel {
-    padding: 0 18px;
-    background-color: white;
+  .collapsible-panel {
+    padding: 0 4px;
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.2s ease-out;
+    transition: all 0.2s ease-out;
 
     &.active {
+      padding-top: 10px;
       max-height: 400px;
     }
   }

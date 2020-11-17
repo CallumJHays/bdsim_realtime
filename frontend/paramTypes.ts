@@ -1,3 +1,5 @@
+import { Observable } from "./api";
+
 export type ParamVal = number | number[] | string | boolean;
 
 export interface Param<T extends ParamVal = ParamVal> {
@@ -25,7 +27,7 @@ export interface EnumParam<T extends ParamVal = ParamVal> extends Param<T> {
 // hyperparams do actually have a value, but we don't use it on the frontend
 export interface HyperParam extends Param<null> {
   id: number;
-  params: { [attr: string]: AnyParam };
+  params: { [attr: string]: Observable<AnyParam> };
   hidden: string[];
 }
 

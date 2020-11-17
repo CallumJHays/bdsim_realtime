@@ -2,14 +2,15 @@ import { AnyParam } from "./paramTypes";
 import { useState, useEffect } from "react";
 import { decode, encode } from "@msgpack/msgpack";
 
+type Callback<T> = (state: T) => void;
 // poor mans rxjs with hooks
 export class Observable<T> {
   state: T;
-  callbacks: ((state: T) => void)[];
+  callbacks: Callback<T>[];
 
-  constructor(init: T) {
+  constructor(init: T, onChange: Callback<T> | null = null) {
     this.state = init;
-    this.callbacks = [];
+    this.callbacks = onChange ? [onChange] : [];
   }
 
   // play nice with react
@@ -17,9 +18,17 @@ export class Observable<T> {
     const [state, setState] = useState<T>(this.state);
     useEffect(() => {
       this.callbacks.push(setState);
-      return () => this.callbacks.filter((cb) => cb != setState);
-    });
+      return () => this.deregister(setState);
+    }, []);
     return [state, this.set];
+  }
+
+  onChange(cb: Callback<T>) {
+    this.callbacks.push(cb);
+  }
+
+  deregister(cb: Callback<T>) {
+    this.callbacks.splice(this.callbacks.indexOf(cb), 1);
   }
 
   set(state: T) {
@@ -64,7 +73,19 @@ export class Api {
     } else if ("params" in msg) {
       this.currentNode.set({
         url: msg["url"],
-        params: msg["params"].map((p: AnyParam) => new Observable(p)),
+        params: msg["params"].map(function wrapObservable(param: AnyParam) {
+          if ("params" in param) {
+            // subParams aren't wrapped in observables in their serialized form -
+            // do so recursively.
+            for (const [attr, subParam] of Object.entries(param.params)) {
+              param.params[attr] = wrapObservable(
+                (subParam as unknown) as AnyParam
+              );
+            }
+          }
+
+          return new Observable(param);
+        }),
         videoStreamUrls: msg["video_streams"],
       });
     } else {

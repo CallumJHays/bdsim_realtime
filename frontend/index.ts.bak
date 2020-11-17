@@ -214,35 +214,6 @@ class NumParamEditor extends ParamEditor<NumParam> {
   }
 
   setup() {
-    const { val, min, max, log_scale, step } = this.param;
-
-    this.el
-      .append("svg")
-      .style("display", "inline-block")
-      .attr("width  ", 230)
-      .attr("height", 47)
-      .append("g")
-      .attr("transform", "translate(12, 6)")
-      .call(
-        sliderBottom((log_scale ? d3.scaleLog : d3.scaleLinear)([min, max]))
-          // @ts-ignore
-          .default(val) // @types/d3-simple-slider missing this, max and default - HOW!?
-          .min(min)
-          .max(max)
-          .ticks(4)
-          .default(val)
-          .step(step)
-          .width(200)
-          .on("onchange", (val: number) => {
-            label.text(formatNum(val));
-            this.setVal(val);
-          })
-      );
-
-    const label = this.el
-      .append("label")
-      .classed("slider-val", true)
-      .text(formatNum(val));
   }
 }
 
@@ -282,33 +253,6 @@ abstract class CollapsibleParamEditor<T extends Param<any>> extends ParamEditor<
 
 class HyperParamEditor extends CollapsibleParamEditor<HyperParam> {
   setup_panel(panel: D3Div) {
-    const params = Object.entries(this.param.params)
-      .filter(([attr]) => {
-        const hidden = this.param.hidden;
-        const x = !hidden.includes(attr);
-        return x;
-      })
-      .map(([_, p]) => p);
-
-    // if its an Optional HyperParam explicitly, inline the underlying value (if it's shown)
-    const isOptional =
-      params.length == 2 &&
-      params[0].name == ".enabled" &&
-      params[1].name === ".enabled_value";
-    const isOptionalHyperParam = isOptional && "params" in params[1];
-
-    panel
-      .selectAll()
-      .data(
-        isOptional
-          ? isOptionalHyperParam
-            ? // inline the underlying value hyperparam
-              [params[0], ...Object.values((params[1] as HyperParam).params)]
-            : [params[0], { ...params[1], name: "" }]
-          : params
-      )
-      .enter()
-      .append((param: AnyParam): any => createParamControl(param).el.node());
   }
 }
 

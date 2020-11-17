@@ -7,10 +7,6 @@ export default function BoolParamEditor({
   onChange,
 }: ParamEditorProps<string>) {
   return (
-    <input
-      type="checkbox"
-      checked={param.val}
-      onChange={(e: any) => onChange(e.target.checked)}
-    />
+    <input value={param.val} onChange={(e: any) => onChange(e.target.value)} />
   );
 }

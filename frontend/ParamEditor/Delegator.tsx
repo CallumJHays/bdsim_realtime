@@ -23,7 +23,8 @@ export default function Delegator({
 }: {
   param: Observable<AnyParam>;
 }) {
-  const [param] = observableParam.useState();
+  const [param, setParam] = observableParam.useState();
+
   const Editor: <T extends ParamVal>(
     props: ParamEditorProps<T>
   ) => JSX.Element = ("params" in param
@@ -41,12 +42,8 @@ export default function Delegator({
     : null) as any;
 
   return (
-    <Editor
-      param={param}
-      onChange={(v) => {
-        param.val = v;
-        observableParam.set(param);
-      }}
-    />
+    <div class="param-editor">
+      <Editor param={param} onChange={(val) => setParam({ ...param, val })} />
+    </div>
   );
 }
