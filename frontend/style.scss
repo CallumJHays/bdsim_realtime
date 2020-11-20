@@ -2,6 +2,14 @@ $fg: #eee;
 $mg: #777;
 $bg: #222;
 
+.control {
+  cursor: pointer;
+  // mixin for ui elements
+  &:hover {
+    box-shadow: 0 0 5px $fg, 0 0 5px $fg;
+  }
+}
+
 body {
   margin: 0;
   font-family: Helvetica;
@@ -10,12 +18,13 @@ body {
 }
 
 select {
+  @extend .control;
+
   margin: 5px 0 5px 20px;
   padding: 5px 35px 5px 5px;
   border-radius: 5px;
   font-size: 16px;
   border: 1px solid $mg;
-  height: 30px;
   appearance: none;
   background: $bg;
   color: $fg;
@@ -29,10 +38,16 @@ select {
 .param-tuner {
   height: 100%;
   overflow-y: scroll;
+  padding: 5px;
+}
+
+.slider-wrapper > * {
+  vertical-align: middle;
 }
 
 .param-editor {
-  padding: 5px;
+  width: 300px;
+  padding-bottom: 10px;
 
   &:before {
     content: "";
@@ -40,14 +55,18 @@ select {
     vertical-align: middle;
   }
 
-  > * {
-    display: inline-block;
+  input[type="checkbox"] {
+    @extend .control;
+
     vertical-align: middle;
+    margin: 0 10px 0 0;
+    cursor: pointer;
   }
 
   label {
     text-align: right;
     margin-right: 10px;
+    vertical-align: middle;
   }
 
   .parameter-value text {
@@ -64,11 +83,16 @@ select {
     padding: 10px;
     cursor: pointer;
     text-align: left;
-    color: $bg;
+    color: $fg;
 
-    $active-color: lighten($mg, 10);
+    $active-color: lighten($mg, 20);
 
-    &:hover {
+    &.disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    &:hover:not(.disabled) {
       background: $active-color;
     }
 
@@ -87,11 +111,14 @@ select {
       font-size: 13px;
       float: right;
       margin-left: 5px;
+
+      &.disabled {
+        content: "";
+      }
     }
   }
 
   .collapsible-panel {
-    padding: 0 4px;
     max-height: 0;
     overflow: hidden;
     transition: all 0.2s ease-out;

@@ -10,6 +10,7 @@ import VideoStream from "./VideoStream";
 import ParamEditorDelegator from "./ParamEditor/Delegator";
 import { useApi, Api } from "./api";
 import "./style.scss";
+import { SignalScopeChart } from "./SignalScopeChart";
 
 function App() {
   const api = useApi();
@@ -52,12 +53,12 @@ export function NodeInterface({ api }: { api: Api }) {
         <ReactGoldenLayout
           htmlAttrs={{
             style: {
-              height: "calc(100vh - 40px)",
+              height: "calc(100vh - 45px)",
             },
           }}
         >
           <Row>
-            <Stack width={40} isClosable={false}>
+            <Stack isClosable={false}>
               <Content title="Parameters" isClosable={false}>
                 <div class="param-tuner">
                   {currentNode.params.map((param) => (
@@ -76,6 +77,13 @@ export function NodeInterface({ api }: { api: Api }) {
                     isClosable={false}
                   >
                     <VideoStream url={url} />
+                  </Content>
+                ))}
+              </Stack>
+              <Stack isClosable={false}>
+                {currentNode.signalScopes.map((scope) => (
+                  <Content title={scope.name} isClosable={false}>
+                    <SignalScopeChart scope={scope} />
                   </Content>
                 ))}
               </Stack>

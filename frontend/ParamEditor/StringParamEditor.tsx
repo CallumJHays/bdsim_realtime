@@ -7,6 +7,12 @@ export default function BoolParamEditor({
   onChange,
 }: ParamEditorProps<string>) {
   return (
-    <input value={param.val} onChange={(e: any) => onChange(e.target.value)} />
+    <label>
+      {param.name}
+      <input
+        value={param.val}
+        onChange={(e: any) => onChange(e.target.value)}
+      />
+    </label>
   );
 }

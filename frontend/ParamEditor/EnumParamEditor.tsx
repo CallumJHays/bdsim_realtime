@@ -8,10 +8,13 @@ export default function EnumParamEditor<T extends ParamVal>({
   onChange,
 }: ParamEditorProps<T, EnumParam<T>>) {
   return (
-    <select onChange={(e: any) => onChange(param.oneof[e.target.value])}>
-      {param.oneof.map((val, idx) => (
-        <option value={idx}>{val.toString()}</option>
-      ))}
-    </select>
+    <label>
+      {param.name}
+      <select onChange={(e: any) => onChange(param.oneof[e.target.value])}>
+        {param.oneof.map((val, idx) => (
+          <option value={idx}>{val.toString()}</option>
+        ))}
+      </select>
+    </label>
   );
 }

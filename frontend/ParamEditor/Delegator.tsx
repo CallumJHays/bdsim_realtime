@@ -15,13 +15,15 @@ export type ParamEditorProps<
   P extends Param<T> = Param<T>
 > = {
   param: P;
-  onChange: (val: T) => void;
+  onChange?: (val: T) => void; // only undefined for HyperParamEditor
 };
 
 export default function Delegator({
   param: observableParam,
+  showLabel = true,
 }: {
   param: Observable<AnyParam>;
+  showLabel?: boolean;
 }) {
   const [param, setParam] = observableParam.useState();
 
@@ -43,7 +45,10 @@ export default function Delegator({
 
   return (
     <div class="param-editor">
-      <Editor param={param} onChange={(val) => setParam({ ...param, val })} />
+      <Editor
+        param={showLabel ? param : { ...param, name: "" }}
+        onChange={(val) => setParam({ ...param, val })}
+      />
     </div>
   );
 }

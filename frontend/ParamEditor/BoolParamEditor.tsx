@@ -7,10 +7,16 @@ export default function BoolParamEditor({
   onChange,
 }: ParamEditorProps<boolean>) {
   return (
-    <input
-      type="checkbox"
-      checked={param.val}
-      onChange={(e: any) => onChange(e.target.checked)}
-    />
+    <>
+      <input
+        type="checkbox"
+        checked={param.val}
+        onClick={(e: any) => {
+          e.stopPropagation(); // disable event bubbling for checkboxes inside collapsibles
+          onChange(e.target.checked);
+        }}
+      />
+      {param.name}
+    </>
   );
 }

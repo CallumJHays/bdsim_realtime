@@ -107,7 +107,7 @@ def ws_disconnect(ws: WebSocket):
 
 
 def available_nodes_message():
-    return {"availableNodes": list(tcp_clients.keys())}
+    return {"available_nodes": list(tcp_clients.keys())}
 
 
 async def broadcast_available_nodes():

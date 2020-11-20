@@ -3,16 +3,26 @@ import React, { JSX, useState } from "react";
 export default function Collapsible({
   title,
   children,
+  disabled = false,
+  activeState: [active, setActive] = useState(false),
 }: {
-  title: string;
+  title: string | JSX.Element;
+  disabled?: boolean;
+  activeState?: [boolean, React.StateUpdater<boolean>];
 } & JSX.ElementChildrenAttribute) {
-  const [active, setActive] = useState(false);
-
   return (
     <>
       <button
-        class={"collapsible-button" + (active ? " active" : "")}
-        onClick={() => setActive(!active)}
+        class={
+          "collapsible-button" +
+          (active ? " active" : "") +
+          (disabled ? " disabled" : "")
+        }
+        onClick={() => {
+          console.log("clicked2");
+          setActive(!active);
+        }}
+        disabled={disabled}
       >
         {title}
       </button>
