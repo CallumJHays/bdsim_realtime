@@ -1,5 +1,53 @@
-.param-editor {
+$fg: #eee;
+$mg: #777;
+$bg: #222;
+
+.control {
+  cursor: pointer;
+  // mixin for ui elements
+  &:hover {
+    box-shadow: 0 0 5px $fg, 0 0 5px $fg;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: Helvetica;
+  color: $fg;
+  background-color: $bg;
+}
+
+select {
+  @extend .control;
+
+  margin: 5px 0 5px 20px;
+  padding: 5px 35px 5px 5px;
+  border-radius: 5px;
+  font-size: 16px;
+  border: 1px solid $mg;
+  appearance: none;
+  background: $bg;
+  color: $fg;
+}
+
+.stream-viewer {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.param-tuner {
+  height: 100%;
+  overflow-y: scroll;
   padding: 5px;
+}
+
+.slider-wrapper > * {
+  vertical-align: middle;
+}
+
+.param-editor {
+  width: 300px;
+  padding-bottom: 10px;
 
   &:before {
     content: "";
@@ -7,38 +55,49 @@
     vertical-align: middle;
   }
 
-  > * {
-    display: inline-block;
+  input[type="checkbox"] {
+    @extend .control;
+
     vertical-align: middle;
+    margin: 0 10px 0 0;
+    cursor: pointer;
   }
 
   label {
     text-align: right;
     margin-right: 10px;
+    vertical-align: middle;
   }
 
-  .slider-val {
-    text-align: left;
+  .parameter-value text {
+    fill: white; // sets the 'currently chosen' value of d3-simple-slider
   }
 
-  .accordion-button {
+  .collapsible-button {
     display: block;
-    background: #eee;
+    background: $mg;
     border: none;
     outline: none;
-    width: 500px;
+    width: 100%;
+    max-width: 280px;
     padding: 10px;
     cursor: pointer;
     text-align: left;
+    color: $fg;
 
-    $select-color: #ccc;
+    $active-color: lighten($mg, 20);
 
-    &:hover {
-      background: $select-color;
+    &.disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    &:hover:not(.disabled) {
+      background: $active-color;
     }
 
     &.active {
-      background: $select-color;
+      background: $active-color;
 
       // caret icon
       &:after {
@@ -50,20 +109,22 @@
     &:after {
       content: "▼"; //"\02795"; /* "+" unicode */
       font-size: 13px;
-      color: #777;
       float: right;
       margin-left: 5px;
+
+      &.disabled {
+        content: "";
+      }
     }
   }
 
-  .accordion-panel {
-    padding: 0 18px;
-    background-color: white;
+  .collapsible-panel {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.2s ease-out;
+    transition: all 0.2s ease-out;
 
     &.active {
+      padding-top: 10px;
       max-height: 400px;
     }
   }
