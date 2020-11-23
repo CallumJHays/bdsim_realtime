@@ -4,7 +4,11 @@ import ParamEditorDelegator, { ParamEditorProps } from "./Delegator";
 import { HyperParam, Param } from "../paramTypes";
 import Collapsible from "./Collapsible";
 import BoolParamEditor from "./BoolParamEditor";
-import { Observable } from "frontend/api";
+import { Observable } from "../observable";
+
+function extended<T extends object>(obj: T, props: Partial<T>) {
+  return Object.assign(Object.create(obj), props);
+}
 
 export default function HyperParamEditor({
   param,
@@ -18,6 +22,7 @@ export default function HyperParamEditor({
 
     // assume that this parameter will always remain an optional parameter -
     // and that this branch will always be executed if it ever executes
+
     const [enabled, setEnabled] = (enabledP as Observable<
       Param<boolean>
     >).useState();
@@ -30,7 +35,7 @@ export default function HyperParamEditor({
           <BoolParamEditor
             param={{ ...enabled, name: param.name }}
             onChange={(val) => {
-              setEnabled({ ...enabled, val });
+              setEnabled(extended(enabled, { val }));
 
               // open the collapsible if we enable it while it's closed
               // and vice-versa

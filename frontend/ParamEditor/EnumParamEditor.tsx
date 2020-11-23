@@ -12,7 +12,9 @@ export default function EnumParamEditor<T extends ParamVal>({
       {param.name}
       <select onChange={(e: any) => onChange(param.oneof[e.target.value])}>
         {param.oneof.map((val, idx) => (
-          <option value={idx}>{val.toString()}</option>
+          <option value={idx} selected={val === param.val}>
+            {val.toString()}
+          </option>
         ))}
       </select>
     </label>

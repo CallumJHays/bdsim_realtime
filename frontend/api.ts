@@ -1,59 +1,28 @@
-import { AnyParam } from "./paramTypes";
 import { useState, useEffect } from "react";
 import { decode, encode } from "@msgpack/msgpack";
 
-type Callback<T> = (state: T) => void;
-
-// something neat I came up with
-export class Observable<T> {
-  state: T;
-  callbacks: Callback<T>[];
-
-  constructor(init: T, onChange: Callback<T> | null = null) {
-    this.state = init;
-    this.callbacks = onChange ? [onChange] : [];
-  }
-
-  // register with react lifecycle
-  useState(): [T, (state: T) => void] {
-    const [state, setState] = useState<T>(this.state);
-    useEffect(() => {
-      this.onChange(setState);
-      return () => this.deRegister(setState);
-    }, []);
-    return [state, this.set.bind(this)];
-  }
-
-  onChange(cb: Callback<T>) {
-    this.callbacks.push(cb);
-  }
-
-  deRegister(cb: Callback<T>) {
-    this.callbacks.splice(this.callbacks.indexOf(cb), 1);
-  }
-
-  set(state: T) {
-    this.state = state;
-    for (const cb of this.callbacks) {
-      cb(state);
-    }
-  }
-}
+import { AnyParam } from "./paramTypes";
+import { Observable } from "./observable";
 
 type AvailableNodesApiMsg = {
   available_nodes: string[];
 };
 
 type BdsimNodeDescApiMsg = {
-  url: string;
+  start_time: number; // ms since epoch
+  ip: string;
   params: AnyParam[];
   video_streams: string[];
   signal_scopes: SignalScope[];
 };
 
-type ParamUpdateApiMsg = AnyParam[];
+type ParamUpdateApiMsg = Partial<AnyParam>[];
 
-type SignalScopeApiMsg = [id: number, ...data: number[][]];
+type SignalScopeApiMsg = [
+  id: number,
+  ms_since_start: number[],
+  ...data: number[]
+];
 
 type ApiMsg =
   | AvailableNodesApiMsg
@@ -62,7 +31,8 @@ type ApiMsg =
   | SignalScopeApiMsg;
 
 type BDSimNode = {
-  url: string;
+  startTime: number;
+  ip: string;
 
   // lists the params top-level heirarchy (no subParams) in its display order
   params: Observable<AnyParam>[];
@@ -84,11 +54,11 @@ export type SignalScope = {
 
   // millliseconds of data to retain and display -
   // prevents memory usage from growing indefinitely
-  keepLastMS: number;
+  keepLastSecs: number;
 };
 export class Api {
   ws: WebSocket;
-  availableNodeUrls: Observable<string[]>;
+  availableNodeIPs: Observable<string[]>;
   currentNode: Observable<BDSimNode | null>;
 
   // can't just use "/ws". WebSocket constructor won't accept it.
@@ -96,7 +66,7 @@ export class Api {
 
   constructor(ws: WebSocket) {
     this.ws = ws;
-    this.availableNodeUrls = new Observable(["None"]);
+    this.availableNodeIPs = new Observable(["None Connected"]);
     this.currentNode = new Observable(null);
 
     ws.onmessage = async ({ data }: { data: Blob }) =>
@@ -111,28 +81,58 @@ export class Api {
 
     if (Array.isArray(msg)) {
       if (typeof msg[0] === "number") {
-        const [idx, ...data] = msg as SignalScopeApiMsg;
+        // signal data update
+        const [idx, ...newData] = msg as SignalScopeApiMsg;
+        const scope = this.currentNode.state.signalScopes[idx];
+
+        // append the data
+        const updatedData = scope.data.state.map((series, serIdx) =>
+          series.concat(newData[serIdx])
+        );
+
+        // only keep scope.keepLastSecs worth of data
+        const [time] = updatedData;
+        const cutoffTime = time[time.length - 1] - scope.keepLastSecs;
+        const cutoffIdx = time.findIndex((t) => t >= cutoffTime);
+        // console.log({ cutoffIdx, cutoffTime, time });
+
+        if (cutoffIdx > 0) {
+          for (const series of updatedData) {
+            series.splice(0, cutoffIdx);
+          }
+        }
+
+        // update the observable{
+        scope.data.set(updatedData);
       } else if ("name" in msg[0]) {
-        msg as ParamUpdateApiMsg;
+        // parameter change from backend
+        for (const paramUpdate of msg as ParamUpdateApiMsg) {
+          const param = this.currentNode.state.id2param[paramUpdate.id];
+          param.set({ ...param.state, ...paramUpdate });
+        }
       } else {
         raiseUnhandled();
       }
     } else if ("available_nodes" in msg) {
+      // node connected / disconnected event (or connected for first time)
       const nodes = msg.available_nodes;
       if (nodes.length == 0) {
-        this.availableNodeUrls.set(["None"]);
+        this.availableNodeIPs.set(["None Connected"]);
         if (this.currentNode.state !== null) {
-          window.alert(`${this.currentNode.state.url} disconnected`);
+          window.alert(`${this.currentNode.state.ip} disconnected`);
           this.currentNode.set(null);
         }
       } else {
-        this.availableNodeUrls.set(nodes);
+        this.availableNodeIPs.set(nodes);
         this.setCurrentNode(nodes[0]);
       }
     } else if ("params" in msg) {
+      // on-connect node description
       let id2param: BDSimNode["id2param"] = {};
-      const params = msg.params.map(function wrapObservable(param: AnyParam) {
-        const observableParam = new Observable(param);
+      const wrapObservable = (param: AnyParam) => {
+        const observableParam = new Observable(param, (p) => {
+          this.send([p.id, p.val]);
+        });
         id2param[param.id] = observableParam;
         if ("params" in param) {
           // subParams aren't wrapped in observables in their serialized form -
@@ -145,26 +145,32 @@ export class Api {
         }
 
         return observableParam;
-      });
+      };
+      const params = msg.params.map(wrapObservable);
+
+      console.log({ msg });
 
       this.currentNode.set({
-        url: msg.url,
+        startTime: msg.start_time,
+        ip: msg.ip,
         videoStreamUrls: msg.video_streams,
         id2param,
         params,
 
         signalScopes: msg.signal_scopes.map((scope: SignalScope) => ({
           ...scope,
-          data: new Observable(Array(scope.n + 1).map(() => [])), // init empty data arrays
-          keepLastMS: 60 * 1000, // keep a minute's worth of data - TODO: send this from scope block
+          data: new Observable(Array(scope.n + 1).fill([])), // init empty data arrays
+          keepLastSecs: 60, // keep a minute's worth of data - TODO: send this from scope block
         })),
       });
+      console.log({ state: this.currentNode.state });
     } else {
       raiseUnhandled();
     }
   }
 
   private send(msg: any) {
+    console.log("sending", { msg, readyState: this.ws.readyState });
     this.ws.send(encode(msg));
   }
 

@@ -1,6 +1,6 @@
 import React, { JSX } from "react";
 
-import { Observable } from "../api";
+import { Observable } from "../observable";
 import { AnyParam, Param, NumParam, VecParam, ParamVal } from "../paramTypes";
 import BoolParamEditor from "./BoolParamEditor";
 import HyperParamEditor from "./HyperParamEditor";

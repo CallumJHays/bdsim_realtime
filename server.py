@@ -13,11 +13,14 @@ app = Sanic(__name__)
 
 
 class RemoteBDSimNode:
-    def __init__(self, reader: StreamReader, writer: StreamWriter, ws_subs: Set[WebSocket], param_defs):
+    def __init__(self, reader: StreamReader, writer: StreamWriter, ws_subs: Set[WebSocket], node_def):
         self.reader = reader
         self.writer = writer
         self.ws_subs = ws_subs
-        self.param_defs = param_defs
+        self.node_def = node_def
+
+    # def get_node_def(self):
+    #     self.writer.write()
 
 tcp_clients = {}  # { url: RemoteBDSimNode }
 ws_clients = {} # { WebSocket: RemoteBDSimNode}
@@ -69,11 +72,11 @@ async def ws(req, ws: WebSocket):
                         ws_clients[ws].ws_subs.add(ws)
 
                         # send the current param definitions
-                        # TODO: update these param definitions according to client-node comms
-                        await send_msg(chosen_node.param_defs, ws)
+                        # TODO: query the node for these param definitions on connect
+                        await send_msg(chosen_node.node_def, ws)
 
             else: # send it directly to the node
-                # TODO: update these chosen_node.param_defs according to client-node comms
+                # TODO: update these chosen_node.node_def according to client-node comms
                 chosen_node.writer.write(raw)
                 await chosen_node.writer.drain()
                 print('proxied', msg, 'to chosen node', chosen_node)
@@ -116,7 +119,7 @@ async def broadcast_available_nodes():
 
 
 async def send_all_ws(clients, message):
-    print('send_all_ws', clients, message)
+    # print('send_all_ws', clients, message)
     if any(clients):
         websockets = list(clients)
         results = await asyncio.gather(
@@ -138,9 +141,10 @@ async def handle_tcp_conn(reader: StreamReader, writer: StreamWriter):
     msgs = msgpack.Unpacker()
 
     msgs.feed(await reader.read(4096))
-    param_defs = next(msgs)  # first message is always the param definition
+    node_def = next(msgs)  # first message is always the param definition
+    print('node_def', node_def)
     tcp_clients[peername] = RemoteBDSimNode(reader, writer, ws_subs,
-                                            param_defs)
+                                            node_def)
 
     await broadcast_available_nodes()
 
@@ -148,7 +152,7 @@ async def handle_tcp_conn(reader: StreamReader, writer: StreamWriter):
         while True:
             msgs.feed(await reader.read(1024))
             for msg in msgs:
-                print('got tcp message', msg)
+                # print('got tcp message', msg)
                 await send_all_ws(ws_subs, msgpack.packb(msg))
 
     # surely this is overkill. copied from example

@@ -18,10 +18,7 @@ export default function Collapsible({
           (active ? " active" : "") +
           (disabled ? " disabled" : "")
         }
-        onClick={() => {
-          console.log("clicked2");
-          setActive(!active);
-        }}
+        onClick={() => setActive(!active)}
         disabled={disabled}
       >
         {title}

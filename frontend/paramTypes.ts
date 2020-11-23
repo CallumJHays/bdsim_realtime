@@ -1,4 +1,4 @@
-import { Observable } from "./api";
+import { Observable } from "./observable";
 
 export type ParamVal = number | number[] | string | boolean;
 

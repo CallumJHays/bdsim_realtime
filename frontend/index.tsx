@@ -24,7 +24,7 @@ function App() {
 }
 
 function NodePicker({ api }: { api: Api }) {
-  const [availableNodeUrls] = api.availableNodeUrls.useState();
+  const [availableNodeIPs] = api.availableNodeIPs.useState();
 
   return (
     <label style={{ margin: 20 }}>
@@ -34,8 +34,8 @@ function NodePicker({ api }: { api: Api }) {
           api.setCurrentNode((e.target as HTMLSelectElement).value)
         }
       >
-        {availableNodeUrls.map((url) => (
-          <option value={url}>{url}</option>
+        {availableNodeIPs.map((ip) => (
+          <option value={ip}>{ip}</option>
         ))}
       </select>
     </label>
@@ -68,11 +68,11 @@ export function NodeInterface({ api }: { api: Api }) {
               </Content>
             </Stack>
 
-            <Column>
+            <Column isClosable={false}>
               <Stack isClosable={false}>
                 {currentNode.videoStreamUrls.map((url) => (
                   <Content
-                    title={`VideoStream ${url}`}
+                    title={url.split("/").pop()}
                     key={url}
                     isClosable={false}
                   >
