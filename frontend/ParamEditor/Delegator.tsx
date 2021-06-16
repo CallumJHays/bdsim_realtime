@@ -1,7 +1,7 @@
 import React, { JSX } from "react";
 
 import { Observable } from "../observable";
-import { AnyParam, Param, NumParam, VecParam, ParamVal } from "../paramTypes";
+import { AnyParam, Param, ParamVal } from "../paramTypes";
 import BoolParamEditor from "./BoolParamEditor";
 import HyperParamEditor from "./HyperParamEditor";
 import EnumParamEditor from "./EnumParamEditor";
@@ -29,19 +29,21 @@ export default function Delegator({
 
   const Editor: <T extends ParamVal>(
     props: ParamEditorProps<T>
-  ) => JSX.Element = ("params" in param
-    ? HyperParamEditor
-    : "oneof" in param
-    ? EnumParamEditor
-    : "max" in param
-    ? typeof param.val === "number"
-      ? NumParamEditor
-      : VecParamEditor
-    : typeof param.val === "boolean"
-    ? BoolParamEditor
-    : typeof param.val === "string"
-    ? StringParamEditor
-    : null) as any;
+  ) => JSX.Element = (
+    "params" in param
+      ? HyperParamEditor
+      : "oneof" in param
+      ? EnumParamEditor
+      : "max" in param
+      ? typeof param.val === "number"
+        ? NumParamEditor
+        : VecParamEditor
+      : typeof param.val === "boolean"
+      ? BoolParamEditor
+      : typeof param.val === "string"
+      ? StringParamEditor
+      : null
+  ) as any;
 
   return (
     <div class="param-editor">

@@ -25,6 +25,7 @@ export default function NumParamEditor({
   const sliderContainer = useRef<SVGGElement>();
   useEffect(() => {
     if (sliderContainer) {
+      // TODO: replace this and d3 dependency with custom implementation.
       d3.select(sliderContainer.current).call(
         sliderBottom((log_scale ? d3.scaleLog : d3.scaleLinear)([min, max]))
           // @ts-ignore

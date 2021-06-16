@@ -1,4 +1,11 @@
-# BDSim Web-Tuner
+# BDSim Realtime
+
+Real-time execution and remote monitoring and tuning of BDSim Block-Diagrams for modelling and control of Dynamical Systems.
+See https://github.com/petercorke/bdsim for the base framework and simulation package.
+
+TODO: more docs
+
+## BDSim Web-Tuner
 
 Web-based telemetry and parameter tuning interface for BDSim
 
@@ -6,7 +13,9 @@ Web-based telemetry and parameter tuning interface for BDSim
 
 Note: Screen-recording lead to low FPS - usual FPS was around 30 on the laptop used (max for webcam).
 
-# Installation
+Note: under heavy development (pre-alpha). These instructions will not fully work at the time of writing, but is supposed to give an idea of the usage once released.
+
+## Installation
 
 ```bash
 pip i -r requirements.txt # use Python >= 3.6
@@ -14,9 +23,7 @@ npm i # install JS deps
 npm run build # build optimized bundle
 ```
 
-# Usage
-
-Note: under heavy development (pre-alpha). These instructions will not work at the time of writing, but is supposed to give an idea of the usage once released.
+## Usage
 
 First, start the server and keep it running:
 
