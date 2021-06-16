@@ -4,9 +4,9 @@ const CopyPlugin = require("copy-webpack-plugin");
 const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 
 module.exports = {
-  mode: "development",
+  mode: "production",
   entry: "./frontend/index.tsx",
-  devtool: "inline-source-map",
+  // devtool: "inline-source-map",
   devServer: {
     contentBase: "./dist",
   },
@@ -68,11 +68,11 @@ module.exports = {
   ],
   optimization: {
     minimize: true,
-    minimizer: [
-      // For webpack@5 you can use the `...` syntax to extend existing minimizers (i.e. `terser-webpack-plugin`), uncomment the next line
-      // `...`
-      new HtmlMinimizerPlugin(),
-      new CssMinimizerPlugin(),
-    ],
+    // minimizer: [
+    //   // For webpack@5 you can use the `...` syntax to extend existing minimizers (i.e. `terser-webpack-plugin`), uncomment the next line
+    //   // `...`
+    //   // new HtmlMinimizerPlugin(),
+    //   // new CssMinimizerPlugin(),
+    // ],
   },
 };

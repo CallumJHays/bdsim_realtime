@@ -52,7 +52,7 @@ export type SignalScope = {
   labels: string[] | null;
   data: Observable<number[][]>;
 
-  // millliseconds of data to retain and display -
+  // seconds of data to retain and display -
   // prevents memory usage from growing indefinitely
   keepLastSecs: number;
 };
@@ -139,7 +139,7 @@ export class Api {
           // do so recursively.
           for (const [attr, subParam] of Object.entries(param.params)) {
             param.params[attr] = wrapObservable(
-              (subParam as unknown) as AnyParam
+              subParam as unknown as AnyParam
             );
           }
         }
@@ -163,7 +163,6 @@ export class Api {
           keepLastSecs: 60, // keep a minute's worth of data - TODO: send this from scope block
         })),
       });
-      console.log({ state: this.currentNode.state });
     } else {
       raiseUnhandled();
     }

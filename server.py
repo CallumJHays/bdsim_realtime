@@ -13,7 +13,8 @@ app = Sanic(__name__)
 
 
 class RemoteBDSimNode:
-    def __init__(self, reader: StreamReader, writer: StreamWriter, ws_subs: Set[WebSocket], node_def):
+    def __init__(self, reader: StreamReader, writer: StreamWriter,
+                 ws_subs: Set[WebSocket], node_def):
         self.reader = reader
         self.writer = writer
         self.ws_subs = ws_subs
@@ -22,8 +23,9 @@ class RemoteBDSimNode:
     # def get_node_def(self):
     #     self.writer.write()
 
+
 tcp_clients = {}  # { url: RemoteBDSimNode }
-ws_clients = {} # { WebSocket: RemoteBDSimNode}
+ws_clients = {}  # { WebSocket: RemoteBDSimNode}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--host',
@@ -75,7 +77,7 @@ async def ws(req, ws: WebSocket):
                         # TODO: query the node for these param definitions on connect
                         await send_msg(chosen_node.node_def, ws)
 
-            else: # send it directly to the node
+            else:  # send it directly to the node
                 # TODO: update these chosen_node.node_def according to client-node comms
                 chosen_node.writer.write(raw)
                 await chosen_node.writer.drain()
@@ -89,6 +91,7 @@ async def ws(req, ws: WebSocket):
 async def recv_msg(ws: WebSocket):
     raw = await ws.recv()
     return msgpack.unpackb(raw), raw
+
 
 async def send_msg(msg, ws: WebSocket):
     return await ws.send(msgpack.packb(msg))
@@ -143,8 +146,7 @@ async def handle_tcp_conn(reader: StreamReader, writer: StreamWriter):
     msgs.feed(await reader.read(4096))
     node_def = next(msgs)  # first message is always the param definition
     print('node_def', node_def)
-    tcp_clients[peername] = RemoteBDSimNode(reader, writer, ws_subs,
-                                            node_def)
+    tcp_clients[peername] = RemoteBDSimNode(reader, writer, ws_subs, node_def)
 
     await broadcast_available_nodes()
 
@@ -174,8 +176,16 @@ async def tcp_server(*args, **kwargs):
         await server.serve_forever()
 
 
-print("TCP server: " + str(args.host or args.tcp_host) + ":" + str(args.tcp_port))
+print("TCP server: " + str(args.host or args.tcp_host) + ":" +
+      str(args.tcp_port))
 app.add_task(tcp_server(host=args.host or args.tcp_host, port=args.tcp_port))
 
 if __name__ == "__main__":
+    # from threading import Thread
+
+    # def run():
     app.run(host=args.host or args.app_host, port=args.app_port)
+
+    # runner = Thread(target=run)
+    # runner.start()
+    # runner.join()
