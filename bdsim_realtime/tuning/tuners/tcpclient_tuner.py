@@ -1,13 +1,12 @@
 import socket
 from select import poll, POLLIN
-from typing import List
+from typing import Dict, List
 import time
 from threading import Thread
 
 import flask
 import numpy as np
 import msgpack
-from bidict import bidict
 
 from bdsim_realtime.tuning.parameter import HyperParam, VecParam, Param
 from bdsim_realtime.tuning.tuners.tuner import Tuner
@@ -30,7 +29,8 @@ class TcpClientTuner(Tuner):
 
     def __init__(self, hostname="localhost", port=31337):
         super().__init__()
-        self.id2param = bidict({})  # id <-> param
+        self.id2param: Dict[int, Param] = {}  # id -> param
+        self.param2id: Dict[Param, int] = {} # param -> id
 
         # setup socket
         self.sock = sock = socket.socket()
@@ -76,7 +76,8 @@ class TcpClientTuner(Tuner):
     def queue_signal_update(self, id, t, data):
         self.signal_queue.append([
             id - 1, # convert to index
-            t, *data])
+            t
+        ] + data)
 
     def setup(self, params, _bd=None):
         self.setup_param_map(params)
@@ -102,7 +103,7 @@ class TcpClientTuner(Tuner):
         # recursively produce parameter definitions to be serialized by msgpack
         param_defs = []
         for param in params:
-            param_def = {'id': self.id2param.inverse[param]}
+            param_def = {'id': self.param2id[param]}
             for attr in param.gui_attrs:
                 val = getattr(param, attr)
                 if val is not None:
@@ -130,6 +131,7 @@ class TcpClientTuner(Tuner):
         for param in params:
             id = len(self.id2param)
             self.id2param[id] = param
+            self.param2id[param] = id
 
             def gui_reconstructor(param):
                 msgpack.pack(self.get_param_defs([param], subparams=False), self.stream)
