@@ -1,9 +1,10 @@
-from enum import Enum
 from typing import Any, Optional, Union
 from typing_extensions import Literal
 from machine import Pin, ADC as _ADC, PWM as _PWM
+import numpy as np
 
 from bdsim.blocks.discrete import ZOH
+from bdsim.blocks.io import ADC, PWM
 from bdsim.blockdiagram import block
 from bdsim.components import Block, Clock, Plug
 
@@ -13,8 +14,11 @@ from bdsim.components import Block, Clock, Plug
 # as they have the same name and they necessarily are defined
 # after the originals, therefore being later in the blocklist,
 # overwriting the original.
+
+
+# TODO: write an abstract implementation and derive from it
 @block
-class DigitalIn(ZOH):
+class DigitalIn_ESP32(ZOH):
     
     def __init__(
         self,
@@ -39,7 +43,7 @@ class DigitalIn(ZOH):
         return [self.pin()]
 
 @block
-class DigitalOut(ZOH):
+class DigitalOut_ESP32(ZOH):
     def __init__(
         self,
         clock: Clock,
@@ -65,61 +69,63 @@ class DigitalOut(ZOH):
     def output(self):
         self.pin(self.inputs[0])
 
-class AdcAtten(Enum):
-    ATTN_0DB = _ADC.ATTN_0DB
-    ATTN_2_5DB = _ADC.ATTN_2_5DB
-    ATTN_6DB = _ADC.ATTN_6DB
-    ATTN_11DB = _ADC.ATTN_11DB
-
-class AdcWidth(Enum):
-    WIDTH_9BIT = _ADC.WIDTH_9BIT
-    WIDTH_10BIT = _ADC.WIDTH_10BIT
-    WIDTH_11BIT = _ADC.WIDTH_11BIT
-    WIDTH_12BIT = _ADC.WIDTH_12BIT
 
 @block
-class ADC(ZOH):
+class ADC_ESP32(ADC):
+
+    # available attenuation configs result in these
+    # https://docs.micropython.org/en/latest/esp32/quickref.html#ADC.atten
+    V_RANGE2ATTEN = {
+        1.0: _ADC.ATTN_0DB,
+        1.34: _ADC.ATTN_2_5DB,
+        2.0: _ADC.ATTN_6DB,
+        3.6: _ADC.ATTN_11DB
+    }
 
     def __init__(
         self,
         clock: Clock,
         inp: Optional[Union[Block, Plug]] = None,
         *,
-        pin: Optional[int] = None,
+        pin: int,
+        v_max: float,
+        v_min: float = 0,
+        bit_width: int = 12,
         pull: Literal["up", "down"] = "up",
         # TODO: make this more generic across uPy devices
         # currently only made for ESP32
-        atten: AdcAtten = AdcAtten.ATTN_0DB,
-        width: int = 12,
         **kwargs: Any
     ):
-        if pin:
-            # TODO: only works for ESP32
-            assert 32 <= pin <= 39
-        assert 9 <= width <= 12
-        super().__init__(nin=1 if inp else 0, nout=1, inputs=(inp,) if inp else (), clock=clock, **kwargs)
-
-        assert pin # TODO: sim difference etc
+        assert 32 <= pin <= 39
+        assert 9 <= bit_width <= 12
+        super().__init__(
+            nin=1 if inp else 0,
+            nout=1,
+            inputs=(inp,) if inp else (),
+            clock=clock,
+            pin=pin,
+            v_min=v_min,
+            v_max=v_max,
+            bit_width=bit_width,
+            **kwargs)
+        self.bit_width = bit_width
 
         self.adc = _ADC(Pin(
             pin,
             Pin.IN,
             Pin.PULL_UP if pull == "up" else Pin.PULL_DOWN
         ))
-        
-        # TODO: make this more generic across uPy devices
-        # currently only made for ESP32
-        self.adc.atten(atten)
-        self.atten_gain = 1. if atten is AdcAtten.ATTN_0DB else \
-            1.34 if atten is AdcAtten.ATTN_2_5DB else \
-            2. if atten is AdcAtten.ATTN_6DB else \
-            3.6 # if atten is AdcAtten.ATTN_11DB 
-        self.adc.width(getattr(AdcWidth, "WIDTH_{}BIT".format(width)))
-        self.width = width
-    
-    def output(self):
-        "returns the voltage read at this pin"
-        return (self.adc.read() / self.width) * self.atten_gain
+
+        self.adc.atten(self.V_RANGE2ATTEN[self.v_range])
+        self.adc.width(getattr(_ADC, "WIDTH_{}BIT".format(bit_width)))
+
+    def next(self):
+        "reset state to the voltage read at this pin"
+        return np.array([
+            float(self.adc.read())
+                / self.bit_width * self.v_range + self.v_min
+        ])
+
 
 # available on ESP32 uPy? ESP32 does have two...
 # @block
@@ -134,30 +140,39 @@ class ADC(ZOH):
 
 #     )
 @block
-class PWM(ZOH):
+class PWM_ESP32(PWM):
 
     def __init__(
         self,
         clock: Clock,
-        inp: Optional[Union[Block, Plug]] = None,
+        duty_cycle: Optional[Union[Block, Plug]] = None,
         *,
+        pin: int,
         freq: int,
-        pin: Optional[int] = None,
+        v_on: float,
+        duty0: int = 0,
+        v_off: float = 0,
         **kwargs: Any
     ):
-        freq = int(freq) # convert for convenience (so 1eX can be used)
         assert 1 <= freq <= 40000000 # 1 - 40mhz
-        super().__init__(nin=1, nout=0, inputs=(inp,), clock=clock, **kwargs)
+        super().__init__(
+            nin=1,
+            nout=1,
+            duty_cycle=duty_cycle,
+            freq=freq,
+            v_off=v_off,
+            v_on=v_on,
+            approximate=True,
+            clock=clock,
+            **kwargs)
 
-        assert pin #TODO: not just esp32
-        self.pwm = _PWM(Pin(pin, Pin.OUT), freq, 0)
-        
-    def output(self):
-        # TODO: sim implementation in upstream bdsim which this subclasses and overwrites
-        """
-        In sim mode: returns True if high or False if low. Otherwise return None.
-        Only Plant()s can be connected to this output.
-        """
-        self.pwm.duty(
-            round(self.inputs[0] * 1023)
-        )
+        assert pin
+        self.pwm = _PWM(Pin(pin, Pin.OUT), freq, duty0)
+    
+    def next(self):
+        inp = self.inputs[0]
+        while isinstance(inp, np.ndarray):
+            inp = inp[0]
+        duty = round(inp * 1023)
+        self.pwm.duty(duty)
+        return np.array([duty])
