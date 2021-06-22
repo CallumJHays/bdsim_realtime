@@ -3,10 +3,12 @@ from typing_extensions import Literal
 from machine import Pin, ADC as _ADC, PWM as _PWM
 import numpy as np
 
+import micropython
+
 from bdsim.blocks.discrete import ZOH
 from bdsim.blocks.io import ADC, PWM
 from bdsim.blockdiagram import block
-from bdsim.components import Block, Clock, Plug
+from bdsim.components import Block, Clock, ClockedBlock, Plug, SinkBlock
 
 
 
@@ -43,7 +45,9 @@ class DigitalIn_ESP32(ZOH):
         return [self.pin()]
 
 @block
-class DigitalOut_ESP32(ZOH):
+class DigitalOut_ESP32(SinkBlock, ClockedBlock):
+    "TODO: not finished or tested. probably wrong."
+
     def __init__(
         self,
         clock: Clock,
@@ -66,7 +70,8 @@ class DigitalOut_ESP32(ZOH):
             Pin.OUT
         )
     
-    def output(self):
+    @micropython.native
+    def next(self):
         self.pin(self.inputs[0])
 
 
@@ -113,18 +118,18 @@ class ADC_ESP32(ADC):
         self.adc = _ADC(Pin(
             pin,
             Pin.IN,
-            Pin.PULL_UP if pull == "up" else Pin.PULL_DOWN
+            Pin.PULL_UP if pull == "down" else Pin.PULL_DOWN
         ))
 
         self.adc.atten(self.V_RANGE2ATTEN[self.v_range])
         self.adc.width(getattr(_ADC, "WIDTH_{}BIT".format(bit_width)))
+        max_reading = 2 ** self.bit_width
+        self.radj = self.v_range / max_reading # reading adjustment constant
 
-    def next(self):
+    @micropython.native
+    def tick(self, dt: float):
         "reset state to the voltage read at this pin"
-        return np.array([
-            float(self.adc.read())
-                / self.bit_width * self.v_range + self.v_min
-        ])
+        self._x = float(self.adc.read()) * self.radj + self.v_min
 
 
 # available on ESP32 uPy? ESP32 does have two...
@@ -169,10 +174,6 @@ class PWM_ESP32(PWM):
         assert pin
         self.pwm = _PWM(Pin(pin, Pin.OUT), freq, duty0)
     
-    def next(self):
-        inp = self.inputs[0]
-        while isinstance(inp, np.ndarray):
-            inp = inp[0]
-        duty = round(inp * 1023)
-        self.pwm.duty(duty)
-        return np.array([duty])
+    def tick(self, dt: float):
+        self._x = self.inputs[0]
+        self.pwm.duty(round(self._x * 1023))

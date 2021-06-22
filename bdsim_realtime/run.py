@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Optional, Set
 import math
 import gc
 
-from micropython import schedule
+import micropython
 from machine import Timer
 
 from bdsim import Block, BlockDiagram, BDSimState
@@ -50,11 +50,10 @@ def _clocked_plans(bd: BlockDiagram):
                                forward=True, predicate=should_exec)  # Forwards
 
         # plan out an order of block .output() execution and propagation. From sources -> sinks
-        # collect sources and clockedblocks
+        # collect sources and ClockedBlocks with inputs ready (at this clock tick offset)
         plan = []
-
         for b in connected_blocks:
-            if isinstance(b, (ClockedBlock, SourceBlock)):
+            if b.nin == 0 or (isinstance(b, ClockedBlock) and all(b.inputs)):
                 in_clocked_plan[b] = True
                 plan.append(b)
 
@@ -76,7 +75,7 @@ def _clocked_plans(bd: BlockDiagram):
                     block.inputs[w.end.port] = True
 
                     if all(block.inputs) and \
-                            (not isinstance(block, ClockedBlock) or block.clock is clock):
+                            (block.clock is clock if isinstance(block, ClockedBlock) else True):
                         plan.append(block)
                         in_clocked_plan[block] = True
                         # reset the inputs
@@ -99,6 +98,7 @@ Mark the blocks as sim_only=True if they are not required for realtime execution
 t_us = None
 
 
+# @micropython.native
 def run(bd: BlockDiagram, max_time: Optional[float] = None):
     global t_us
     state = bd.state = BDSimState()
@@ -127,27 +127,24 @@ def run(bd: BlockDiagram, max_time: Optional[float] = None):
     t_us = utime.ticks_us()
     state.t = 0
 
-    print('t_us', t_us)
-    for timer, (clock, plan) in zip(timers, clock2plan.items()):
-        now = utime.ticks_us()
+    for idx, (timer, (clock, plan)) in enumerate(zip(timers, clock2plan.items())):
         utime.sleep_us(utime.ticks_diff(
-            t_us + math.ceil(clock.offset * 1e6), now))
-        print('starting timer for clock', clock, 'at',
-              utime.ticks_us(), 'beforesleep', now)
+            t_us + math.ceil(clock.offset * 1e6), utime.ticks_us()))
 
         # inner fn to closure the variables
         def kickoff(clock, plan, state, timer):
             exec_plan = create_exec_plan(
-                clock=clock, plan=plan, state=state, timer=timer)
+                plan=plan, state=state, timer=timer,
+                do_gc_collect=(idx == 0), max_time=max_time)
             timer.init(
                 period=math.ceil(clock.T * 1e3),  # period is in ms
-                callback=lambda _: schedule(exec_plan, None)
+                callback=lambda _: micropython.schedule(exec_plan, None)
             )
         kickoff(clock, plan, state, timer)
 
-    print("System time (utime.ticks_us()) is now {}. Running scheduler.run()!".format(t_us))
+    print("Sleeping and waiting for hardware timers... (t_us={})".format(t_us))
     if max_time:
-        print('sleeping for ', math.ceil(max_time * 1e3), 'ms')
+        print('Stopping in', math.ceil(max_time * 1e3), 'ms')
         utime.sleep_ms(math.ceil(max_time * 1e3))
     else:
         while not state.stop:
@@ -161,34 +158,52 @@ def run(bd: BlockDiagram, max_time: Optional[float] = None):
 
 
 def create_exec_plan(
-    clock: Clock,
     plan: List[Block],
     state: BDSimState,
-    timer: Timer
+    timer: Timer,
+    max_time: Optional[float],
+    do_gc_collect: bool
 ):
 
-    executed_once = False
+    # executed_once = False
 
+    @micropython.native
     def exec_plan(arg: None):
         global t_us
-        nonlocal executed_once
+        # nonlocal executed_once
 
         now_us = utime.ticks_us()
         dt_us = utime.ticks_diff(now_us, t_us)
         t_us = now_us
-        state.t += dt_us * 1e-6
-        print('executing plan', plan, 'at time', state.t)
+        dt = dt_us * 1e-6
+        state.t += dt
+        # print('executing plan', plan, 'at time', state.t)
+
+        if state.stop or (max_time is not None and state.t > max_time):  # don't need to check for max_time as that's done in the mainloop in run()
+            timer.deinit()
+            print('Stopped due to', state.stop if state.stop else "t > max_time")
+            return
+
+        if do_gc_collect:
+            # print('running gc.collect()')
+            gc.collect()
+            # pass
 
         try:
             # execute the 'ontick' steps for each clock, ie read ADC's output PWM's, send/receive datas
-            for b in clock.blocklist:
-                # if this block requires inputs, only run .next() the second time this was scheduled.
-                # this way, its data-dependencies are met before .next() executes
-                if executed_once or isinstance(b, SourceBlock):
-                    b._x = b.next()
+            # for b in clock.blocklist:
+            #     # if this block requires inputs, only run .next() the second time this was scheduled.
+            #     # this way, its data-dependencies are met before .next() executes
+            #     if executed_once or isinstance(b, SourceBlock):
+            #         b._x = b.next()
 
+            # print('clock tick took', utime.ticks_diff(
+            #     utime.ticks_us(), now_us) * 1e-6, 'secs\n')
             # now execute the given plan
             for b in plan:
+                if isinstance(b, ClockedBlock):
+                    b.tick(dt)
+
                 if isinstance(b, SinkBlock):
                     b.step()  # step sink blocks
                 else:
@@ -203,16 +218,12 @@ def create_exec_plan(
             timer.deinit()
             raise e
 
-        executed_once = True
-        print('plan execution took', utime.ticks_diff(
-            utime.ticks_us(), now_us) * 1e-6, 'secs\n')
-
-        if state.stop:  # don't need to check for max_time as that's done in the mainloop in run()
-            timer.deinit()
-            print('Stopped due to', state.stop)
+        # executed_once = True
+        # print('plan', plan, 'starting at', state.t, 'secs executed in', utime.ticks_diff(
+        #     utime.ticks_us(), now_us) * 1e-6, 'secs\n')
 
     return exec_plan
-
+ 
 
 def _collect_connected(
     block: Block,
