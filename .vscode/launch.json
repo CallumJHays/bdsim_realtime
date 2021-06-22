@@ -8,8 +8,11 @@
       "name": "Python: Current File",
       "type": "python",
       "request": "launch",
-      "program": "server.py",
-      "console": "integratedTerminal"
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "env": {
+        "BDSIMPATH": "${workspaceRoot}/bdsim_realtime/blocks"
+      }
     }
   ]
 }
