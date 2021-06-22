@@ -1,6 +1,5 @@
-import time
-from typing import Dict, List, Optional, Set
-import sched
+from typing import Callable, Dict, List, Optional, Set
+
 from bdsim import Block, BlockDiagram, BDSimState
 from bdsim.components import Clock, ClockedBlock, SinkBlock, SourceBlock
 
@@ -11,63 +10,77 @@ def _clocked_plans(bd: BlockDiagram):
     prev_clock_period = 0
     # track to make sure we're actually executing all blocks on clock cycles properly.
     # otherwise the realtime blockdiagram is not fit for realtime execution
-    in_clocked_plan: Dict[Block, bool] = {block: False for block in bd.blocklist}
-    
+    in_clocked_plan: Dict[Block, bool] = {
+        block: False for block in bd.blocklist if not block.sim_only}
+
     # TODO: implement sim mode context manager
     assert not any(b.blockclass == 'transfer' for b in bd.blocklist), \
         "Tranfer blocks are not supported in realtime execution mode (yet). Sorry!"
 
-    for clock in bd.clocklist:
+    bd.reset()
+
+    for clock in sorted(bd.clocklist, key=lambda clock: clock.offset):
 
         # assert that all clocks' periods are integer multiples of eachother so that they don't overlap.
         # Should really be done at clock definition time.
         # May be avoided with some multiprocess magic - but only on multicore systems.
-        assert (prev_clock_period % clock.T == 0) or (clock.T % prev_clock_period == 0)
+        assert (prev_clock_period % clock.T == 0) or (
+            clock.T % prev_clock_period == 0)
         prev_clock_period = clock.T
 
         # Need to find all the blocks that require execution on this Clock's tick.
-        to_exec_on_tick: Set[Block] = set()
+        connected_blocks: Set[Block] = set()
+
+        def should_exec(b: Block) -> bool:
+            return not b.sim_only \
+                and not in_clocked_plan[b] \
+                and (not isinstance(b, ClockedBlock) or b.clock is clock)
+
         # Recurse backwards and forwards to collect these
         for block in clock.blocklist:
-            _collect_connected(block, to_exec_on_tick, forward=False) # Backwards
-            _collect_connected(block, to_exec_on_tick, forward=True) # Forwards
-        
+            _collect_connected(block, connected_blocks,
+                               forward=False, predicate=should_exec)  # Backwards
+            _collect_connected(block, connected_blocks,
+                               forward=True, predicate=should_exec)  # Forwards
+
         # plan out an order of block .output() execution and propagation. From sources -> sinks
-
-        # collect sources
+        # collect sources and ClockedBlocks with inputs ready (at this clock tick offset)
         plan = []
-        for b in to_exec_on_tick:
-            if isinstance(b, SourceBlock):
-                plan.append(b)
+        for b in connected_blocks:
+            if b.nin == 0 or (isinstance(b, ClockedBlock) and all(b.inputs)):
                 in_clocked_plan[b] = True
-
+                plan.append(b)
 
         # then propagate, updating plan as we go
-        for idx in range(len(to_exec_on_tick)):
+        idx = 0
+        while idx < len(plan):
             for outwires in plan[idx].outports:
+
                 for w in outwires:
                     block: Block = w.end.block
 
                     # make sure we actually need to .output() this block on this clock tick.
                     # Should always be true
-                    assert block in to_exec_on_tick
+                    assert block in in_clocked_plan
 
                     if block in plan:
                         continue
 
                     block.inputs[w.end.port] = True
-                    if all(in_plan for in_plan in block.inputs):
+
+                    if all(block.inputs) and \
+                            (block.clock is clock if isinstance(block, ClockedBlock) else True):
                         plan.append(block)
                         in_clocked_plan[block] = True
                         # reset the inputs
                         block.inputs = [None] * len(block.inputs)
-        
-        assert len(plan) == len(to_exec_on_tick)
+            idx += 1
+
         plans[clock] = plan
-    
-    not_planned = set(block for block, planned in in_clocked_plan.items() if not planned)
-    # TODO: implement sim mode context manager
-    assert not not_planned, """Blocks {} do not depend on or are a dependency of any ClockedBlocks.
+
+    not_planned = set(
+        block for block, planned in in_clocked_plan.items() if not planned)
+    assert not any(not_planned), """Blocks {} do not depend on or are a dependency of any ClockedBlocks.
 This is required for its real-time execution.
 Mark the blocks as sim_only=True if they are not required for realtime execution, or declare them within the `with bdsim.simulation_only: ...` context manager""" \
     .format(not_planned)
@@ -136,8 +149,11 @@ def exec_plan_scheduled(
     
     # now execute the given plan
     for b in plan:
+        if isinstance(b, ClockedBlock):
+            b.tick(dt)
+
         if isinstance(b, SinkBlock):
-            b.step() # step sink blocks
+            b.step()  # step sink blocks
         else:
             # propagate all other blocks
             out = b.output(state.t)
@@ -164,19 +180,29 @@ def exec_plan_scheduled(
                 next_scheduled_time,
                 start_time))
 
+    return exec_plan
+ 
 
-
-def _collect_connected(block: Block, collected: Set[Block], forward: bool):
+def _collect_connected(
+    block: Block,
+    collected: Set[Block],
+    forward: bool,
+    predicate: Callable[[Block], bool]
+):
     """Recurses connections in the block diagram, either forward or backward from a given block.
     Collects the blocks into the provided "collected" set.
-    if inports=True, will recurse through inputs, otherwise will recurse through outputs
+    if forward=True, will recurse through outputs, otherwise will recurse through inputs
     """
     collected.add(block)
-    
+
     if forward:
-        for wire in block.inports:
-            _collect_connected(wire.start.block, collected, forward)
-    else:
         for wires in block.outports:
             for wire in wires:
-                _collect_connected(wire.end.block, collected, forward)
+                if predicate(wire.end.block):
+                    _collect_connected(
+                        wire.end.block, collected, forward, predicate)
+    else:
+        for wire in block.inports:
+            if predicate(wire.start.block):
+                _collect_connected(
+                    wire.start.block, collected, forward, predicate)

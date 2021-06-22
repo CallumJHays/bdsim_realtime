@@ -1,9 +1,14 @@
-from typing import  Any, List, Union
-from io import IOBase
+from typing import Any, List, Union
+from io import IOBase, BytesIO
+from bdsim.blocks.discrete import ZOH
+import utime
+
 import msgpack
 import numpy as np
+import micropython
 
 from bdsim.components import Block, Clock, Plug, SinkBlock, SourceBlock, block, ClockedBlock
+from bdsim.profiling import timed
 
 
 # pivate helpers
@@ -50,7 +55,7 @@ class DataSender(SinkBlock, ClockedBlock):
         return []
 
 @block
-class DataReceiver(SourceBlock, ClockedBlock):
+class DataReceiver(SourceBlock, ZOH):
     # TODO: Should only work with bdsim-realtime
 
     def __init__(self, sender: IOBase, *, nout: int, clock: Clock, **kwargs: Any):
