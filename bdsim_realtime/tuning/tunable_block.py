@@ -1,7 +1,8 @@
 from abc import ABC
+from typing import Dict
 from bdsim.components import Block
 from .parameter import Param
-from .tuners.tuner import global_current_tuner
+from .tuners import tuner
 
 
 class TunableBlock(Block, ABC):
@@ -11,7 +12,7 @@ class TunableBlock(Block, ABC):
 
         self.tinker = tinker
         self.is_subblock = is_subblock
-        self.params = {}
+        self.params: Dict[str, Param] = {}
 
     def param(self, name, val=None, **kwargs):
         """
@@ -32,14 +33,14 @@ class TunableBlock(Block, ABC):
         """
         assert name in self.params, \
             ("Attempted to get param {name} which doesn't exist on block of class {classname}. Available params are {params}"
-             "If calling from a TunableBloc constructor, you may be using self.param instead of self._param") \
+             "If calling from a TunableBlock constructor, you may be using self.param instead of self._param") \
             .format(name=name, classname=self.__class__.__name__, params=[self.params.keys()])
 
         self._param(name, val=val, created_by_user=True, **kwargs)
 
         return self.params[name]
 
-    def _param(self, name, val, ret_param=False, **kwargs):
+    def _param(self, name: str, val, ret_param=False, **kwargs):
         """
         Creates a Param spec. If the user requested this directly (by passing in a Param for val):
             - add this block into it's param.used_in list,
@@ -70,6 +71,7 @@ class TunableBlock(Block, ABC):
                     self.params[name] = param = Param(val, **kwargs)
                 else:
                     param.override(val=val, **kwargs)
+
             else:
                 assert name not in self.params, \
                     ("Assigning the same parameter to a block twice: {name}. This may be unintended. "
@@ -84,8 +86,8 @@ class TunableBlock(Block, ABC):
         if self.tinker or param.created_by_user:
 
             # don't double up on controls
-            if global_current_tuner and param not in global_current_tuner.gui_params:
-                global_current_tuner.gui_params.append(param)
+            if tuner.global_current_tuner and param not in tuner.global_current_tuner.gui_params:
+                tuner.global_current_tuner.gui_params.append(param)
             # bind the on_change handler
             param.on_change(lambda val: setattr(self, name, val))
             param.used_in.append((self, name))

@@ -28,7 +28,7 @@ npm run build # build optimized bundle
 First, start the server and keep it running:
 
 ```bash
-python server.py --host=0.0.0.0 --app-port=8080
+python -m bdsim_realtime.webapp
 ```
 
 Next, (in a separate terminal) install [BDSim](httpsserver://github.com/petercorke/bdsim) with `pip install bdsim`. Then define a block-diagram and link it to the tuner:

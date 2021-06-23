@@ -2,9 +2,6 @@ import os
 import bdsim
 import bdsim_realtime
 
-# include bdsim_realtime blocks
-os.environ['BDSIM_PATH'] = f"{os.environ.get('BDSIM_PATH', '')}:{bdsim_realtime.__path__}/blocks"
-
 # setup block-diagram and tuner client
 # note we need to create a blockdiagram through the sim object because
 # the BlockDiagram class doesn't load new blocks from BDSIM_PATH; only BDSim does.

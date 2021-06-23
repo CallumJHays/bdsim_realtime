@@ -4,7 +4,7 @@ import time
 import sched
 
 from bdsim import Block, BlockDiagram, BDSimState
-from bdsim.components import Clock, ClockedBlock, SinkBlock, SourceBlock
+from bdsim.components import Clock, ClockedBlock, SinkBlock
 
 from .tuning import Tuner
 

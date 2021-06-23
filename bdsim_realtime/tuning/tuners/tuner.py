@@ -19,8 +19,9 @@ class Tuner(ABC):
         global global_current_tuner
         self._prev_tuner = global_current_tuner
         global_current_tuner = self
+        return self
     
-    def __exit__(self):
+    def __exit__(self, *_):
         global global_current_tuner
         global_current_tuner = self._prev_tuner
         self._prev_tuner = None

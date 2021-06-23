@@ -84,9 +84,11 @@ class TcpClientTuner(Tuner):
 
         # host the flask videostrema app in a separate thread (for now)
         if any(self.video_streams):
-            Thread(target=self.stream_app.run,
+            Thread(
+                target=self.stream_app.run,
                 args=((self.ip, self.stream_port)),
-                daemon=True).start()
+                daemon=True
+            ).start()
 
         msgpack.pack({
             'start_time': time.time() * 1000,
@@ -159,6 +161,9 @@ class TcpClientTuner(Tuner):
 
         # submit any queued signal updates
         for update in self.signal_queue:
+            for idx, u in enumerate(update):
+                while isinstance(u, np.ndarray) and len(u) == 1:
+                    update[idx] = u = u[0]
             msgpack.pack(update, self.stream)
         self.stream.flush()
         self.signal_queue = []

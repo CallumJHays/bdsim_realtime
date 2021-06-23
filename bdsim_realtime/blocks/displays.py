@@ -29,9 +29,7 @@ class TunerScope(SinkBlock):
         *inputs,
         nin=None,
         styles=None,
-        scale='auto',
         labels=None,
-        grid=True,
         tuner: 'Tuner',
         **kwargs
     ):

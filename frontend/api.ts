@@ -62,15 +62,18 @@ export class Api {
   currentNode: Observable<BDSimNode | null>;
 
   // can't just use "/ws". WebSocket constructor won't accept it.
-  static WS_URL = "ws://" + document.domain + ":" + location.port + "/ws";
+  // static WS_URL = "ws://" + document.domain + ":" + location.port + "/ws";
+  static WS_URL = "ws://localhost:8080/ws";
 
   constructor(ws: WebSocket) {
     this.ws = ws;
     this.availableNodeIPs = new Observable(["None Connected"]);
     this.currentNode = new Observable(null);
 
-    ws.onmessage = async ({ data }: { data: Blob }) =>
-      this.onMsg(decode(await data.arrayBuffer()) as ApiMsg);
+    ws.onmessage = async ({ data }: { data: Blob }) => {
+      const apiMsg = await data.arrayBuffer();
+      this.onMsg(decode(apiMsg) as ApiMsg);
+    };
   }
 
   private onMsg(msg: ApiMsg) {
