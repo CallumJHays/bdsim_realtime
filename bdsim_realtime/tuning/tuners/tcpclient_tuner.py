@@ -56,9 +56,10 @@ class TcpClientTuner(Tuner):
         self.unpacker = msgpack.Unpacker()
 
 
-    def register_video_stream(self, feed_fn, name):
+    def register_video_stream(self, feed_fn, name: str):
         # eventually the socket will be used directly for the video stream.
         # until then we'll host the stream using flask here.
+        name = name.replace(' ', '-')
 
         # flask wants each endpoint to have separate '__name__'s...
         named_feed = lambda: feed_fn()
@@ -66,7 +67,6 @@ class TcpClientTuner(Tuner):
 
         self.stream_app.route('/' + name)(named_feed)
         self.video_streams.append("http://%s:%d/%s" % (self.ip, self.stream_port, name))
-        print('video_streams', self.video_streams)
 
     def register_signal_scope(self, name, n_signals, styles=None, labels=None):
         id = len(self.signal_scopes) + 1 # avoid 0 to use truthyness
@@ -79,8 +79,8 @@ class TcpClientTuner(Tuner):
             t
         ] + data)
 
-    def setup(self, params, _bd=None):
-        self.setup_param_map(params)
+    def setup(self):
+        self.setup_param_map(self.gui_params)
 
         # host the flask videostrema app in a separate thread (for now)
         if any(self.video_streams):
@@ -88,14 +88,12 @@ class TcpClientTuner(Tuner):
                 args=((self.ip, self.stream_port)),
                 daemon=True).start()
 
-        print('video_streams', self.video_streams)
-
         msgpack.pack({
             'start_time': time.time() * 1000,
             'ip': self.ip,
             'video_streams': self.video_streams,
             'signal_scopes': self.signal_scopes,
-            'params': self.get_param_defs(params)
+            'params': self.get_param_defs(self.gui_params)
         }, self.stream)
         self.stream.flush()
 

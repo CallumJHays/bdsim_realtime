@@ -1,6 +1,7 @@
 from abc import ABC
 from bdsim.components import Block
 from .parameter import Param
+from .tuners.tuner import global_current_tuner
 
 
 class TunableBlock(Block, ABC):
@@ -83,8 +84,8 @@ class TunableBlock(Block, ABC):
         if self.tinker or param.created_by_user:
 
             # don't double up on controls
-            if param not in self.bd.gui_params:
-                self.bd.gui_params.append(param)
+            if global_current_tuner and param not in global_current_tuner.gui_params:
+                global_current_tuner.gui_params.append(param)
             # bind the on_change handler
             param.on_change(lambda val: setattr(self, name, val))
             param.used_in.append((self, name))

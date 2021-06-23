@@ -1,7 +1,12 @@
+
 from typing import Callable, Dict, List, Optional, Set
+import time
+import sched
 
 from bdsim import Block, BlockDiagram, BDSimState
 from bdsim.components import Clock, ClockedBlock, SinkBlock, SourceBlock
+
+from .tuning import Tuner
 
 
 def _clocked_plans(bd: BlockDiagram):
@@ -11,7 +16,8 @@ def _clocked_plans(bd: BlockDiagram):
     # track to make sure we're actually executing all blocks on clock cycles properly.
     # otherwise the realtime blockdiagram is not fit for realtime execution
     in_clocked_plan: Dict[Block, bool] = {
-        block: False for block in bd.blocklist if not block.sim_only}
+        block: False for block in bd.blocklist
+    }
 
     # TODO: implement sim mode context manager
     assert not any(b.blockclass == 'transfer' for b in bd.blocklist), \
@@ -32,8 +38,7 @@ def _clocked_plans(bd: BlockDiagram):
         connected_blocks: Set[Block] = set()
 
         def should_exec(b: Block) -> bool:
-            return not b.sim_only \
-                and not in_clocked_plan[b] \
+            return not in_clocked_plan[b] \
                 and (not isinstance(b, ClockedBlock) or b.clock is clock)
 
         # Recurse backwards and forwards to collect these
@@ -81,13 +86,14 @@ def _clocked_plans(bd: BlockDiagram):
     not_planned = set(
         block for block, planned in in_clocked_plan.items() if not planned)
     assert not any(not_planned), """Blocks {} do not depend on or are a dependency of any ClockedBlocks.
-This is required for its real-time execution.
-Mark the blocks as sim_only=True if they are not required for realtime execution, or declare them within the `with bdsim.simulation_only: ...` context manager""" \
+This is required for its real-time execution.""" \
     .format(not_planned)
+    # TODO: bd.simulation_only:
+# Mark the blocks as sim_only=True if they are not required for realtime execution, or declare them within the `with bdsim.simulation_only: ...` context manager""" \
 
     return plans
 
-def run(bd: BlockDiagram, max_time: Optional[float]=None):
+def run(bd: BlockDiagram, max_time: Optional[float]=None, tuner: Optional[Tuner] = None):
     state = bd.state = BDSimState()
     state.T = max_time
 
@@ -98,6 +104,13 @@ def run(bd: BlockDiagram, max_time: Optional[float]=None):
     clock2plan = _clocked_plans(bd)
 
     bd.start()
+    
+    if tuner:
+        # needs to happen after self.start() because the autogen'd block-names
+        # are used internally
+        tuner.setup()
+    
+    last_most_frequent_clock = sorted(bd.clocklist, key=lambda c: c.T + c.offset)[0]
 
     SETUP_WAIT_BUFFER = 1 # in seconds, to give time for the planning and scheduling
     now = time.monotonic()
@@ -108,7 +121,7 @@ def run(bd: BlockDiagram, max_time: Optional[float]=None):
     print("Executing {}:".format(max_time or "forever"))
 
     for clock, plan in clock2plan.items():
-        scheduled_time = now + clock.offset + SETUP_WAIT_BUFFER
+        scheduled_time: float = now + clock.offset + SETUP_WAIT_BUFFER
         print("{} <SCHEDULED for {}>:{}".format(
             clock, scheduled_time,
             ''.join('\n\t{}. {}{}'.format(idx, b, ' (clocked)' if isinstance(b, ClockedBlock) else '') for idx, b in enumerate(plan))))
@@ -122,7 +135,8 @@ def run(bd: BlockDiagram, max_time: Optional[float]=None):
                 state,
                 scheduler,
                 scheduled_time,
-                scheduled_time))
+                scheduled_time,
+                tuner if clock is last_most_frequent_clock else None))
 
     print("System time (time.monotonic()) is now {}. Running scheduler.run()!".format(time.monotonic()))
     scheduler.run()
@@ -134,23 +148,24 @@ def exec_plan_scheduled(
     plan: List[Block],
     state: BDSimState,
     scheduler: sched.scheduler,
-    scheduled_time: int,
-    start_time: int
+    scheduled_time: float,
+    start_time: float,
+    tuner_to_update: Optional[Tuner]
 ):
     state.t = scheduled_time - start_time
     
     # execute the 'ontick' steps for each clock, ie read ADC's output PWM's, send/receive datas
-    for b in clock.blocklist:
-        # if this block requires inputs, only run .next() the second time this was scheduled.
-        # this way, its data-dependencies are met before .next() executes
-        if scheduled_time == start_time and not isinstance(b, SourceBlock):
-            continue
-        b._x = b.next()
+    # for b in clock.blocklist:
+    #     # if this block requires inputs, only run .next() the second time this was scheduled.
+    #     # this way, its data-dependencies are met before .next() executes
+    #     if scheduled_time == start_time and not isinstance(b, SourceBlock):
+    #         continue
+    #     b._x = b.next()
     
     # now execute the given plan
     for b in plan:
         if isinstance(b, ClockedBlock):
-            b.tick(dt)
+            b._x = b.next()
 
         if isinstance(b, SinkBlock):
             b.step()  # step sink blocks
@@ -167,7 +182,7 @@ def exec_plan_scheduled(
     # print('after collect()', time.monotonic() - scheduled_time)
 
     if not state.stop and (state.T is None or state.t < state.T):
-        next_scheduled_time = scheduled_time + clock.T
+        next_scheduled_time: float = scheduled_time + clock.T
         scheduler.enterabs(
             next_scheduled_time,
             priority=1,
@@ -178,10 +193,12 @@ def exec_plan_scheduled(
                 state,
                 scheduler,
                 next_scheduled_time,
-                start_time))
+                start_time,
+                tuner_to_update))
+    
+    if tuner_to_update:
+        tuner_to_update.update()
 
-    return exec_plan
- 
 
 def _collect_connected(
     block: Block,

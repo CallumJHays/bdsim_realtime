@@ -36,26 +36,28 @@ Next, (in a separate terminal) install [BDSim](httpsserver://github.com/petercor
 ```python
 # demo.py
 import bdsim, numpy as np
+from bdsim_realtime
 
 # setup block-diagram and tuner client
 bd = bdsim.BlockDiagram()
-tuner = bdsim.tuning.tuners.TcpClientTuner()
 
-# use first local camera available
-bgr = bd.CAMERA(0)
+# All TunableBlocks within this context manager will register their parameters swith the Tuner
+with bdsim.tuning.tuners.TcpClientTuner() as tuner:
+    # use first local camera available
+    bgr = bd.CAMERA(0)
 
-# display in web stream
-bd.DISPLAY(bgr, name="BGR Stream", web_stream_host=tuner)
+    # display in web stream
+    bd.DISPLAY(bgr, name="BGR Stream", web_stream_host=tuner)
 
-# tune system parameters in the web editor
-gain = bd.param(1, min=0, max=100)
+    # tune system parameters in the web editor
+    gain = tuner.param(1, min=0, max=100)
 
-# stream some telemetry data (random for demo)
-data = bd.FUNCTION(
-    lambda: (gain * np.random.rand(3)).tolist(),
-    nout=3
-)
-bd.SCOPE(data[:], nin=3, tuner=tuner)
+    # stream some telemetry data (random for demo)
+    data = bd.FUNCTION(
+        lambda: (gain * np.random.rand(3)).tolist(),
+        nout=3
+    )
+    bd.SCOPE(data[:], nin=3, tuner=tuner)
 
 bd.compile() # perform verification
 bd.run_realtime() # run forever

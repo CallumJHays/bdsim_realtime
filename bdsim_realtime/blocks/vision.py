@@ -1,10 +1,13 @@
 import logging
+from os import PathLike
 from threading import Thread, Lock
+from typing import Union
 
 import numpy as np
 import flask
 
-from bdsim.components import SourceBlock, SinkBlock, FunctionBlock, SubsystemBlock, block
+from bdsim.components import Clock, SourceBlock, SinkBlock, FunctionBlock, SubsystemBlock, block
+from bdsim.blocks.discrete import ZOH
 from bdsim_realtime.tuning.tuners import Tuner
 from bdsim_realtime.tuning.tunable_block import TunableBlock
 from bdsim_realtime.tuning.parameter import HyperParam, RangeParam
@@ -13,7 +16,7 @@ try:
     import cv2
 
     @block
-    class Camera(SourceBlock):
+    class Camera(SourceBlock, ZOH):
         """
         :blockname:`CAMERA`
 
@@ -32,13 +35,13 @@ try:
 
         type = "camera"
 
-        def __init__(self, source, *cv2_args, **kwargs):
+        def __init__(self, source: Union[cv2.VideoCapture, int, str, PathLike], *, clock: Clock, **kwargs):
             """
-            :param source: the source of the video stream. A local camera device index or a path/url.
+            :param source: the source of the video stream. A `cv2.VideoCapture` object, a local camera device index or a path/url.
                 If a video file is specified, will play the file (works in simulation mode).
+                For camera options, construct the cv2.VideoCapture object yourself using https://docs.opencv.org/4.1.0/d8/dfe/classcv_1_1VideoCapture.html#ac4107fb146a762454a8a87715d9b7c96
             :type source: Union[int, string]
             :param `*cv2_args`: Optional arguments to pass into `cv2's VideoCapture constructor`
-            <https://docs.opencv.org/4.1.0/d8/dfe/classcv_1_1VideoCapture.html#ac4107fb146a762454a8a87715d9b7c96>
             :param ``**kwargs``: common Block options
             :return: a VIDEOCAPTURE block
             :rtype: VideoCapture instance
@@ -52,12 +55,13 @@ try:
             <https://docs.opencv.org/4.1.0/d8/dfe/classcv_1_1VideoCapture.html>
             for further detail.
             """
-            super().__init__(nout=1, **kwargs)
+            super().__init__(clock=clock, **kwargs)
             self.is_livestream = isinstance(source, int)
             if not (self.is_livestream or isinstance(source, str)):
                 # coerce it into str, good if it's something like a pathlib.Path
                 source = str(source)
-            self.video_capture = cv2.VideoCapture(source, *cv2_args)
+            self.video_capture = cv2.VideoCapture(source)
+            self._x = np.array([])
             assert (
                 self.video_capture.isOpened()
             ), "VideoCapture at {source} could not be opened." \
@@ -69,6 +73,18 @@ try:
             if not self.is_livestream:
                 # restart the video if it is
                 self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        
+        def next(self):
+            t = self.bd.state.t
+            # set the frame index if we're using a video file
+            if t is not None and not self.is_livestream:
+                fps = self.video_capture.get(cv2.CAP_PROP_FPS)
+                frame_n = int(round(t * fps))
+                self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_n)
+
+            _, frame = self.video_capture.read()
+            assert frame is not None, "An unknown error occured in OpenCV: camera disconnected or video file ended"
+            return frame
 
         def output(self, t=None):
             # set the frame index if we're using a video file
@@ -447,9 +463,7 @@ try:
             # TODO: web-stream via HTTP stream over raw sockets so it'll work in micropython
             # OR/AND, do so over websockets without jpeg encoding
             if self.web_stream_host is not None:
-                app = flask.Flask('dirtywebstream')
 
-                @app.route("/")
                 def video_feed():
                     def poll_frames():
                         # maintain a lock for the lifetime of this generator - cleanup when client d/c's
@@ -467,40 +481,43 @@ try:
                                           mimetype="multipart/x-mixed-replace; boundary=frame")
 
                 def host_web_stream():
-                    if isinstance(self.web_stream_host, Tuner):
-                        self.web_stream_host.register_video_stream(video_feed, name=self.name)
-                        
-                    else:
-                        # start web stream and let bdsim choose the address
-                        if self.web_stream_host is True:
-                            # TODO: review this default host - localhost is the typical standard but I find that annoying
-                            host, port = '0.0.0.0', 7645
-                            # keep trying 0.0.0.0 ports - counting up
-                            while True:
-                                try:
-                                    app.run(host, port)
-                                except OSError as e:
-                                    if 'Address already in use' in str(e):
-                                        port += 1
-                                    else:
-                                        raise Exception('unexpected error', e)
-                        else:
-                            host, port = self.web_stream_host
-                            app.run(host, port)
+                    # Host it ourselves
+                    app = flask.Flask('dirtywebstream')
+                    app.route("/")(video_feed)
 
-                Thread(target=host_web_stream, daemon=True).start()
+                    # start web stream and let bdsim choose the address
+                    if self.web_stream_host is True:
+                        # TODO: review this default host - localhost is the typical standard but I find that annoying
+                        host, port = '0.0.0.0', 7645
+                        # keep trying 0.0.0.0 ports - counting up
+                        while True:
+                            try:
+                                app.run(host, port)
+                            except OSError as e:
+                                if 'Address already in use' in str(e):
+                                    port += 1
+                                else:
+                                    raise Exception('unexpected error', e)
+                    else:
+                        host, port = self.web_stream_host
+                        app.run(host, port)
+
+                if isinstance(self.web_stream_host, Tuner):
+                    self.web_stream_host.register_video_stream(video_feed, name=self.name)
+                else: # host it ourselves in another thread
+                    Thread(target=host_web_stream, daemon=True).start()
 
         def step(self):
             [input] = self.inputs
             if self.show_fps:
                 frequency = 1 / \
-                    (self.bd.t - self.last_t) if self.last_t else self.fps
+                    (self.bd.state.t - self.last_t) if self.last_t else self.fps
                 # moving average formula
                 self.fps = self.FPS_AV_FACTOR * frequency + self.FPS_AV_FACTOR_INV * self.fps
                 input = cv2.putText(input, "%d FPS" % int(self.fps), (0, 16),
                                     cv2.FONT_HERSHEY_PLAIN, 1,
                                     self.FPS_COLOR if len(input.shape) == 3 else 255)  # use white if it's grayscale
-                self.last_t = self.bd.t
+                self.last_t = self.bd.state.t
 
             # just quick and dirty for now
             if self.web_stream_host:

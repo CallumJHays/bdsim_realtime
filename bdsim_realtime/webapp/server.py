@@ -5,9 +5,9 @@ from sanic import Sanic, response
 from sanic.websocket import WebSocketCommonProtocol as WebSocket
 from pathlib import Path
 import argparse
-from typing import Dict, Set
+from typing import Set
 
-HERE = Path(__file__).parent
+CLIENT_PATH = str(Path(__file__).parent / 'client')
 
 
 class RemoteBDSimNode:
@@ -99,10 +99,10 @@ def cli():
 
     @app.route('/')
     async def index(req):
-        return await response.file('dist/index.html')
+        return await response.file(CLIENT_PATH + '/index.html')
 
 
-    app.static('/', str(Path(__file__).parent / 'client'))
+    app.static('/', CLIENT_PATH)
 
 
     def ws_disconnect(ws: WebSocket):

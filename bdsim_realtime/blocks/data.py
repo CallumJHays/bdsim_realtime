@@ -1,14 +1,9 @@
-from typing import Any, List, Union
-from io import IOBase, BytesIO
-from bdsim.blocks.discrete import ZOH
-import utime
+from typing import Any, Union
+from io import IOBase
 
 import msgpack
-import numpy as np
-import micropython
-
+from bdsim.blocks.discrete import ZOH
 from bdsim.components import Block, Clock, Plug, SinkBlock, SourceBlock, block, ClockedBlock
-from bdsim.profiling import timed
 
 
 # pivate helpers
