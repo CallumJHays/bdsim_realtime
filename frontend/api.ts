@@ -163,7 +163,7 @@ export class Api {
         signalScopes: msg.signal_scopes.map((scope: SignalScope) => ({
           ...scope,
           data: new Observable(Array(scope.n + 1).fill([])), // init empty data arrays
-          keepLastSecs: 60, // keep a minute's worth of data - TODO: send this from scope block
+          keepLastSecs: 5, // keep a minute's worth of data - TODO: send this from scope block
         })),
       });
     } else {

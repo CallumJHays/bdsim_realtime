@@ -72,7 +72,7 @@ setup(
         '': recursively_list_all_files('bdsim_realtime/webapp/client')
     },
 
-    install_requires=['websockets', 'numpy', 'typing_extensions', 'sanic', 'spatialmath-python', 'msgpack'],
+    install_requires=['websockets', 'numpy', 'typing_extensions', 'sanic', 'spatialmath-python', 'msgpack', 'bdsim'],
 
     
     extras_require={
