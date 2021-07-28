@@ -139,7 +139,10 @@ def run(bd: BlockDiagram, max_time: Optional[float]=None, tuner: Optional[Tuner]
                 tuner if clock is last_most_frequent_clock else None))
 
     print("System time (time.monotonic()) is now {}. Running scheduler.run()!".format(time.monotonic()))
-    scheduler.run()
+    try:
+        scheduler.run()
+    finally:
+        bd.done()
     print("Realtime Execution Stopped AS EXPECTED")
 
 
