@@ -6,7 +6,14 @@ from typing import Union
 import numpy as np
 import flask
 
-from bdsim.components import Clock, SourceBlock, SinkBlock, FunctionBlock, SubsystemBlock, block
+from bdsim.components import (
+    Clock,
+    SourceBlock,
+    SinkBlock,
+    FunctionBlock,
+    SubsystemBlock,
+    block,
+)
 from bdsim.blocks.discrete import ZOH
 from bdsim_realtime.tuning.tuners import Tuner
 from bdsim_realtime.tuning.tunable_block import TunableBlock
@@ -16,7 +23,7 @@ try:
     import cv2
 
     @block
-    class Camera(SourceBlock, ZOH):
+    class Camera(SourceBlock, ZOH, TunableBlock):
         """
         :blockname:`CAMERA`
 
@@ -35,7 +42,13 @@ try:
 
         type = "camera"
 
-        def __init__(self, source: Union[cv2.VideoCapture, int, str, PathLike], *, clock: Clock, **kwargs):
+        def __init__(
+            self,
+            source: Union[cv2.VideoCapture, int, str, PathLike],
+            *,
+            clock: Clock,
+            **kwargs
+        ):
             """
             :param source: the source of the video stream. A `cv2.VideoCapture` object, a local camera device index or a path/url.
                 If a video file is specified, will play the file (works in simulation mode).
@@ -56,24 +69,70 @@ try:
             for further detail.
             """
             super().__init__(clock=clock, **kwargs)
-            self.is_livestream = isinstance(source, int)
-            if not (self.is_livestream or isinstance(source, str)):
-                # coerce it into str, good if it's something like a pathlib.Path
-                source = str(source)
-            self.video_capture = cv2.VideoCapture(source)
+            if isinstance(source, cv2.VideoCapture):
+                self.is_livestream = True
+                self.video_capture = source
+            else:
+                self.is_livestream = isinstance(source, int)
+                if not (self.is_livestream or isinstance(source, str)):
+                    # coerce it into str, good if it's something like a pathlib.Path
+                    source = str(source)
+                self.video_capture = cv2.VideoCapture(source)
+
+            self.video_capture.set(cv2.CAP_PROP_EXPOSURE, 40)
+            self.video_capture.set(3, 320)
+            self.video_capture.set(4, 180)
+
+            def set_resolution(res):
+                w, h = res
+                self.video_capture.release()
+                self.video_capture = cv2.VideoCapture(source)
+                self.video_capture.set(cv2.CAP_PROP_EXPOSURE, 40)
+                self.video_capture.set(3, 320)
+                self.video_capture.set(4, 180)
+
+            self.resolution = self._param(
+                "resolution",
+                (320, 180),
+                # options found from running `v4l2-ctl -d /dev/video0 --list-formats-ext`
+                oneof=[
+                    (160, 90),
+                    (160, 120),
+                    (640, 480),
+                    (176, 144),
+                    (320, 180),
+                    (320, 240),
+                    (352, 288),
+                    (432, 240),
+                    (640, 360),
+                    (800, 448),
+                    (800, 600),
+                    (864, 480),
+                    (960, 720),
+                    (1024, 576),
+                    (1280, 720),
+                    (1600, 896),
+                    (1920, 1080),
+                    (2304, 1296),
+                    (2304, 1536),
+                ],
+                on_change=set_resolution,
+            )
+
             self._x = np.array([])
-            assert (
-                self.video_capture.isOpened()
-            ), "VideoCapture at {source} could not be opened." \
-                "Please check the filepath / if another process is using the camera" \
-                .format(source=source)
+            assert self.video_capture.isOpened(), (
+                "VideoCapture at {source} could not be opened."
+                "Please check the filepath / if another process is using the camera".format(
+                    source=source
+                )
+            )
 
         def start(self, **kwargs):
             super().start(**kwargs)
             if not self.is_livestream:
                 # restart the video if it is
                 self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        
+
         def next(self):
             t = self.bd.state.t
             # set the frame index if we're using a video file
@@ -83,7 +142,9 @@ try:
                 self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_n)
 
             _, frame = self.video_capture.read()
-            assert frame is not None, "An unknown error occured in OpenCV: camera disconnected or video file ended"
+            assert (
+                frame is not None
+            ), "An unknown error occured in OpenCV: camera disconnected or video file ended"
             return frame
 
         def output(self, t=None):
@@ -94,7 +155,9 @@ try:
                 self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_n)
 
             _, frame = self.video_capture.read()
-            assert frame is not None, "An unknown error occured in OpenCV: camera disconnected or video file ended"
+            assert (
+                frame is not None
+            ), "An unknown error occured in OpenCV: camera disconnected or video file ended"
             return [frame]
 
     @block
@@ -119,9 +182,9 @@ try:
             except AttributeError as e:
                 raise Exception(
                     "Available methods are: {methods}".format(
-                        methods=', '.join(
-                            attr for attr in dir(cv2)
-                            if attr.startswith('COLOR_'))
+                        methods=", ".join(
+                            attr for attr in dir(cv2) if attr.startswith("COLOR_")
+                        )
                     )
                 ) from e
             return [converted]
@@ -131,20 +194,28 @@ try:
 
         type = "inrange"
 
-        def __init__(self, input, lower=(0, 0, 0), upper=(255, 255, 255), **kwargs):
+        def __init__(
+            self, input, lower=(0, 0, 0), upper=(255, 255, 255), enable=True, **kwargs
+        ):
             super().__init__(inputs=[input], nin=1, nout=1, **kwargs)
 
-            self.lower = self._param('lower', lower,
-                                     min=(0, 0, 0), max=(255, 255, 255), step=1)
-            self.upper = self._param('upper', upper,
-                                     min=(0, 0, 0), max=(255, 255, 255), step=1)
+            self.lower = self._param(
+                "lower", lower, min=(0, 0, 0), max=(255, 255, 255), step=1
+            )
+            self.upper = self._param(
+                "upper", upper, min=(0, 0, 0), max=(255, 255, 255), step=1
+            )
+            self.enable = self._param("enable", enable)
 
         def output(self, _t=None):
             [input] = self.inputs
-            mask = cv2.inRange(input, self.lower, self.upper)
+            if self.enable:
+                mask = cv2.inRange(input, self.lower, self.upper)
+            else:
+                mask = np.ones(input.shape[:2], np.uint8)
             return [mask]
 
-    @ block
+    @block
     class Mask(FunctionBlock):
         type = "mask"
 
@@ -156,7 +227,7 @@ try:
             masked = cv2.bitwise_and(input, input, mask=mask)
             return [masked]
 
-    @ block
+    @block
     class Threshold(FunctionBlock):
 
         type = "threshold"
@@ -174,21 +245,20 @@ try:
             super().__init__(inputs=[input], nin=1, nout=1, **kwargs)
             assert (
                 method in self.available_methods
-            ), "Thresholding method {method} unsupported. Please select from methods in Threshold.available_methods list" \
-                .format(method=method)
+            ), "Thresholding method {method} unsupported. Please select from methods in Threshold.available_methods list".format(
+                method=method
+            )
 
             for l, u in zip(lower, upper):
                 assert l <= u, "all lower vals must be less than corresponding upper"
 
             self.lower = lower
             self.upper = upper
-            self.method = getattr(
-                cv2, "THRESH_{method}".format(method=method.upper()))
+            self.method = getattr(cv2, "THRESH_{method}".format(method=method.upper()))
 
         def output(self, _t=None):
             [input] = self.inputs
-            _, output = cv2.threshold(
-                input, self.lower, self.upper, self.method)
+            _, output = cv2.threshold(input, self.lower, self.upper, self.method)
             return [output]
 
     class KernelParam2D(HyperParam):
@@ -198,15 +268,18 @@ try:
         def __init__(self, spec=("ellipse", 3, 3), **kwargs):
             super().__init__(spec, **kwargs)
 
-            type, width, height = spec if isinstance(spec, tuple) else \
-                ("custom", *spec.shape) if isinstance(spec, np.ndarray) else \
-                (None, None, None)
+            type, width, height = (
+                spec
+                if isinstance(spec, tuple)
+                else ("custom", *spec.shape)
+                if isinstance(spec, np.ndarray)
+                else (None, None, None)
+            )
 
             # self.array = self.param('array', self.val if type == 'custom' else None)
-            self.type = self.param(
-                'type', type, oneof=self.available_types)
-            self.width = self.param('width', width, min=3, max=12, step=1)
-            self.height = self.param('height', height, min=3, max=12, step=1)
+            self.type = self.param("type", type, oneof=self.available_types)
+            self.width = self.param("width", width, min=1, max=12, step=1)
+            self.height = self.param("height", height, min=1, max=12, step=1)
             self.update()
 
         def update(self, _=None):
@@ -217,8 +290,9 @@ try:
             # else:
             assert (
                 self.type in self.available_types
-            ), "Morphological Kernel type {type} unsupported. Please select from {types}" \
-                .format(type=self.type, types=self.available_types)
+            ), "Morphological Kernel type {type} unsupported. Please select from {types}".format(
+                type=self.type, types=self.available_types
+            )
 
             # self.show('width', 'height')
             # self.hide(self.array)
@@ -230,25 +304,28 @@ try:
 
             # self.val = self.array.val
             self.val = cv2.getStructuringElement(
-                getattr(cv2, "MORPH_%s" % self.type.upper()),
-                (self.width, self.height)
+                getattr(cv2, "MORPH_%s" % self.type.upper()), (self.width, self.height)
             )
 
     class _Morphological(FunctionBlock, TunableBlock):
         type = "morphological"
 
-        def __init__(self, input, diadic_func, kernel, iterations, **kwargs):
-            super().__init__(inputs=[input]
-                             if input else [], nin=1, nout=1, **kwargs)
+        def __init__(self, input, diadic_func, kernel, iterations, enable, **kwargs):
+            super().__init__(inputs=[input] if input else [], nin=1, nout=1, **kwargs)
 
             self.diadic_func = diadic_func
-            self.kernel = self._param('kernel', KernelParam2D(kernel))
+            self.kernel = self._param("kernel", KernelParam2D(kernel))
             self.iterations = self._param(
-                'iterations', iterations, min=1, max=10, step=1)
+                "iterations", iterations, min=0, max=10, step=1
+            )
+            self.enable = self._param("enable", enable)
 
         def output(self, _t=None):
             [input] = self.inputs
-            output = self.diadic_func(input, self.kernel, self.iterations)
+            if self.enable:
+                output = self.diadic_func(input, self.kernel, self.iterations)
+            else:
+                output = input
             return [output]
 
     @block
@@ -256,12 +333,15 @@ try:
 
         type = "erode"
 
-        def __init__(self, input, iterations=1, kernel=("ellipse", 3, 3), **kwargs):
+        def __init__(
+            self, input, iterations=1, kernel=("ellipse", 3, 3), enable=False, **kwargs
+        ):
             super().__init__(
                 input,
                 diadic_func=cv2.erode,
                 kernel=kernel,
                 iterations=iterations,
+                enable=enable,
                 **kwargs,
             )
 
@@ -285,19 +365,15 @@ try:
         type = "openmask"
 
         def __init__(self, input, iterations=1, kernel=("ellipse", 3, 3), **kwargs):
-            super().__init__(
-                inputs=[input],
-                nin=1,
-                nout=1,
-                **kwargs
-            )
+            super().__init__(inputs=[input], nin=1, nout=1, **kwargs)
 
-            morphblock_kwargs = dict(input=None,
-                                     kernel=self._param(
-                                         'kernel', KernelParam2D(kernel), ret_param=True),
-                                     iterations=self._param(
-                                         'iterations', iterations, ret_param=True),
-                                     bd=self.bd, is_subblock=True)
+            morphblock_kwargs = dict(
+                input=None,
+                kernel=self._param("kernel", KernelParam2D(kernel), ret_param=True),
+                iterations=self._param("iterations", iterations, ret_param=True),
+                bd=self.bd,
+                is_subblock=True,
+            )
 
             # I would expect cv2.morphologyEx() to be faster than an cv2.erode -> cv2.dilate
             # but preliminary benchmarks show this isn't the case.
@@ -317,17 +393,15 @@ try:
 
         def __init__(self, input, iterations=1, kernel=("ellipse", 3, 3), **kwargs):
             # TODO Propagate name in some way to aid debugging
-            super().__init__(
-                inputs=[input],
-                nin=1,
-                nout=1,
-                **kwargs
+            super().__init__(inputs=[input], nin=1, nout=1, **kwargs)
+            args = dict(
+                input=None,
+                tinker=kwargs["tinker"],
+                kernel=self._param("kernel", kernel),
+                iterations=self._param("iterations", iterations, min=1, max=10, step=1),
+                bd=self.bd,
+                is_subblock=True,
             )
-            args = dict(input=None, tinker=kwargs['tinker'],
-                        kernel=self._param('kernel', kernel),
-                        iterations=self._param(
-                            'iterations', iterations, min=1, max=10, step=1),
-                        bd=self.bd, is_subblock=True)
 
             self.dilate = Dilate(**args)
             self.erode = Erode(**args)
@@ -373,23 +447,49 @@ try:
         ):
             super().__init__(inputs=[input], nin=1, nout=1, **kwargs)
 
-            self.top_k = self._param(
-                'top_k', top_k, min=1, max=10, default=1, step=1)
+            self.top_k = self._param("top_k", top_k, min=1, max=10, default=1, step=1)
 
             self.blob_color = self._param(
-                'blob_color', 255, oneof=(0, 255), on_change=self._setup_sbd)
-            self.min_dist_between_blobs = self._param('min_dist_between_blobs',
-                                                      min_dist_between_blobs, min=1, max=1e3, log_scale=True, on_change=self._setup_sbd)
-            self.area = self._param('area', RangeParam(
-                area, min=1, max=2**21, default=(50, 2**21), log_scale=True), on_change=self._setup_sbd)
-            self.circularity = self._param('circularity', RangeParam(
-                circularity, min=0, max=1, default=(0.5, 1), step=0.01), on_change=self._setup_sbd)
-            self.inertia_ratio = self._param('inertia_ratio', RangeParam(
-                inertia_ratio, min=0, max=1, default=(0.5, 1), step=0.01), on_change=self._setup_sbd)
-            self.convexivity = self._param('convexivity', RangeParam(
-                convexivity, min=0, max=1, default=(0.5, 1), step=0.01), on_change=self._setup_sbd)
+                "blob_color", 255, oneof=(0, 255), on_change=self._setup_sbd
+            )
+            self.min_dist_between_blobs = self._param(
+                "min_dist_between_blobs",
+                min_dist_between_blobs,
+                min=1,
+                max=1e3,
+                log_scale=True,
+                on_change=self._setup_sbd,
+            )
+            self.area = self._param(
+                "area",
+                RangeParam(
+                    area, min=1, max=2 ** 21, default=(50, 2 ** 21), log_scale=True
+                ),
+                on_change=self._setup_sbd,
+            )
+            self.circularity = self._param(
+                "circularity",
+                RangeParam(circularity, min=0, max=1, default=(0.5, 1), step=0.01),
+                on_change=self._setup_sbd,
+            )
+            self.inertia_ratio = self._param(
+                "inertia_ratio",
+                RangeParam(inertia_ratio, min=0, max=1, default=(0.5, 1), step=0.01),
+                on_change=self._setup_sbd,
+            )
+            self.convexivity = self._param(
+                "convexivity",
+                RangeParam(convexivity, min=0, max=1, default=(0.5, 1), step=0.01),
+                on_change=self._setup_sbd,
+            )
             self.grayscale_threshold = self._param(
-                'grayscale_threshold', grayscale_threshold, min=(0, 0, 1), max=(255, 255, 255), step=1, on_change=self._setup_sbd)
+                "grayscale_threshold",
+                grayscale_threshold,
+                min=(0, 0, 1),
+                max=(255, 255, 255),
+                step=1,
+                on_change=self._setup_sbd,
+            )
 
             self._setup_sbd()
 
@@ -420,7 +520,7 @@ try:
         def output(self, _t=None):
             [input] = self.inputs
             keypoints = self.detector.detect(input)
-            return [keypoints[:self.top_k] if self.top_k else keypoints]
+            return [keypoints[: self.top_k] if self.top_k else keypoints]
 
     @block
     class Display(SinkBlock):
@@ -445,7 +545,9 @@ try:
         FPS_AV_FACTOR_INV = 1 - FPS_AV_FACTOR
         FPS_COLOR = (0, 255, 255)  # yellow
 
-        def __init__(self, input, name="Display", show_fps=False, web_stream_host=None, **kwargs):
+        def __init__(
+            self, input, name="Display", show_fps=False, web_stream_host=None, **kwargs
+        ):
             super().__init__(inputs=[input], nin=1, name=name, **kwargs)
             self.show_fps = show_fps
             self.web_stream_host = web_stream_host
@@ -472,56 +574,72 @@ try:
                         try:
                             while True:
                                 new_frame_lock.acquire()
-                                yield(b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' +
-                                      bytearray(self.new_frame) + b'\r\n')
+                                yield (
+                                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                                    + bytearray(self.new_frame)
+                                    + b"\r\n"
+                                )
                         except GeneratorExit:
                             self.new_frame_locks.remove(new_frame_lock)
 
-                    return flask.Response(poll_frames(),
-                                          mimetype="multipart/x-mixed-replace; boundary=frame")
+                    return flask.Response(
+                        poll_frames(),
+                        mimetype="multipart/x-mixed-replace; boundary=frame",
+                    )
 
                 def host_web_stream():
                     # Host it ourselves
-                    app = flask.Flask('dirtywebstream')
+                    app = flask.Flask("dirtywebstream")
                     app.route("/")(video_feed)
 
                     # start web stream and let bdsim choose the address
                     if self.web_stream_host is True:
                         # TODO: review this default host - localhost is the typical standard but I find that annoying
-                        host, port = '0.0.0.0', 7645
+                        host, port = "0.0.0.0", 7645
                         # keep trying 0.0.0.0 ports - counting up
                         while True:
                             try:
                                 app.run(host, port)
                             except OSError as e:
-                                if 'Address already in use' in str(e):
+                                if "Address already in use" in str(e):
                                     port += 1
                                 else:
-                                    raise Exception('unexpected error', e)
+                                    raise Exception("unexpected error", e)
                     else:
                         host, port = self.web_stream_host
                         app.run(host, port)
 
                 if isinstance(self.web_stream_host, Tuner):
-                    self.web_stream_host.register_video_stream(video_feed, name=self.name)
-                else: # host it ourselves in another thread
+                    self.web_stream_host.register_video_stream(
+                        video_feed, name=self.name
+                    )
+                else:  # host it ourselves in another thread
                     Thread(target=host_web_stream, daemon=True).start()
 
         def step(self):
             [input] = self.inputs
             if self.show_fps:
-                frequency = 1 / \
-                    (self.bd.state.t - self.last_t) if self.last_t else self.fps
+                frequency = (
+                    1 / (self.bd.state.t - self.last_t) if self.last_t else self.fps
+                )
                 # moving average formula
-                self.fps = self.FPS_AV_FACTOR * frequency + self.FPS_AV_FACTOR_INV * self.fps
-                input = cv2.putText(input, "%d FPS" % int(self.fps), (0, 16),
-                                    cv2.FONT_HERSHEY_PLAIN, 1,
-                                    self.FPS_COLOR if len(input.shape) == 3 else 255)  # use white if it's grayscale
+                self.fps = (
+                    self.FPS_AV_FACTOR * frequency + self.FPS_AV_FACTOR_INV * self.fps
+                )
+                input = cv2.putText(
+                    input,
+                    "%d FPS" % int(self.fps),
+                    (0, 16),
+                    cv2.FONT_HERSHEY_PLAIN,
+                    1,
+                    self.FPS_COLOR if len(input.shape) == 3 else 255,
+                )  # use white if it's grayscale
                 self.last_t = self.bd.state.t
 
             # just quick and dirty for now
             if self.web_stream_host:
-                _ret, jpg = cv2.imencode('.jpg', input)
+                success, jpg = cv2.imencode(".jpg", input)
+                assert success
                 self.new_frame = jpg
 
                 # let mjpeg stream clients know that a new frame is available
@@ -533,7 +651,7 @@ try:
                 # cv2 needs this to actually show. this blocking maybe matplotlib could do it instead.
                 cv2.waitKey(1)
 
-        def stop(self):
+        def done(self):
             if not self.web_stream_host:
                 # TODO: Check if overkill to ensure that self.name never changes?
                 cv2.destroyWindow(self.name)
@@ -544,16 +662,20 @@ try:
         type = "drawkeypoints"
 
         def __init__(self, image, keypoints, color=(0, 0, 255), **kwargs):
-            super().__init__(inputs=[image, keypoints],
-                             nin=2, nout=1, **kwargs)
+            super().__init__(inputs=[image, keypoints], nin=2, nout=1, **kwargs)
             self.color = color
 
         def output(self, _t=None):
             [image, keypoints] = self.inputs
-            drawn = cv2.drawKeypoints(image, keypoints, np.array([]), self.color,
-                                      cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            drawn = cv2.drawKeypoints(
+                image,
+                keypoints,
+                np.array([]),
+                self.color,
+                cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS,
+            )
             return [drawn]
 
+
 except ImportError:
-    logging.warning(
-        "OpenCV not installed. Vision blocks will not be available")
+    logging.warning("OpenCV not installed. Vision blocks will not be available")
