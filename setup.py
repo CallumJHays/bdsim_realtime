@@ -22,7 +22,7 @@ setup(
 
     name='bdsim_realtime',
 
-    version="1.0.1",
+    version="1.0.2",
 
     description='Real-time execution and remote monitoring and tuning of BDSim Block-Diagrams for modelling and control of Dynamical Systems',
 
@@ -41,6 +41,8 @@ setup(
         'Intended Audience :: Science/Research',
         # Pick your license as you wish (should match "license" above)
         'License :: OSI Approved :: MIT License',
+
+        "Operating System :: OS Independent",
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
