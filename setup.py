@@ -22,7 +22,7 @@ setup(
 
     name='bdsim_realtime',
 
-    version="1.0.3",
+    version="1.0.4",
 
     description='Real-time execution and remote monitoring and tuning of BDSim Block-Diagrams for modelling and control of Dynamical Systems',
 
