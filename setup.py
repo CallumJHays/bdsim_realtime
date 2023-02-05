@@ -71,10 +71,9 @@ setup(
     packages=find_packages(exclude=["test_*", "TODO*"]),
 
     include_package_data=True,
-    package_data={
-        # TODO
-        '': recursively_list_all_files('frontend/dist')
-    },
+    # package_data={
+    #     '': recursively_list_all_files('frontend/dist')
+    # },
 
     install_requires=[
         'numpy',

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "vite build frontend",
+    "build": "vite build frontend --outDir ../bdsim_realtime/frontend_dist",
     "dev": "vite serve frontend",
     "preview": "vite preview"
   },

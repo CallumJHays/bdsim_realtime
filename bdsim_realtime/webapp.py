@@ -10,7 +10,7 @@ import uvloop
 
 app = Sanic('bdsim-webapp-server')
 
-CLIENT_PATH = str((Path(__file__).parent / '../frontend/dist').resolve())
+CLIENT_PATH = str((Path(__file__).parent / './frontend_dist').resolve())
 
 print(CLIENT_PATH)
 
