@@ -5,6 +5,8 @@ from os import path
 
 here = path.abspath(path.dirname(__file__))
 
+__version__ = "1.0.5"
+
 # Get the long description from the README file
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
@@ -22,7 +24,7 @@ setup(
 
     name='bdsim_realtime',
 
-    version="1.0.4",
+    version=__version__,
 
     description='Real-time execution and remote monitoring and tuning of BDSim Block-Diagrams for modelling and control of Dynamical Systems',
 
