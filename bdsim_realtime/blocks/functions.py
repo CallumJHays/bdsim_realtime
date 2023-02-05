@@ -1,14 +1,17 @@
 
 import numpy as np
-from bdsim.components import FunctionBlock, block
+from bdsim.components import FunctionBlock
 
 from bdsim_realtime.tuning.tunable_block import TunableBlock
 
 
-@block
+
 class Tunable_Gain(FunctionBlock, TunableBlock):
 
     type = "gain"
+
+    nin = 1
+    nout = 1
 
     def __init__(self, K, *inputs, premul=False, **kwargs):
         super().__init__(nin=1, nout=1, inputs=inputs, **kwargs)

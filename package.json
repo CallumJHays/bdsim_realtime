@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "webpack",
-    "start": "webpack serve --host=0.0.0.0 --port=3000",
-    "watch": "webpack -w"
+    "build": "vite build frontend",
+    "dev": "vite serve frontend",
+    "preview": "vite preview"
   },
   "author": "CallumJHays <callumjhays@gmail.com>",
   "license": "MIT",
@@ -18,12 +18,12 @@
     "@types/d3-simple-slider": "^1.5.1",
     "d3": "^6.2.0",
     "d3-simple-slider": "^1.10.1",
-    "preact": "^10.5.7",
+    "preact": "^10.11.3",
     "preact-cli": "^3.0.3",
-    "preact-compat": "^3.19.0",
     "uplot": "^1.4.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^3.1.0",
     "copy-webpack-plugin": "^6.2.1",
     "css-loader": "^5.0.0",
     "css-minimizer-webpack-plugin": "^1.1.5",
@@ -33,7 +33,10 @@
     "style-loader": "^2.0.0",
     "ts-loader": "^8.0.5",
     "typescript": "^4.0.3",
+    "vite": "^4.1.1",
+    "vite-plugin-html": "^3.2.0",
     "webpack": "^4.44.2",
     "webpack-cli": "^4.0.0"
-  }
+  },
+  "type": "module"
 }

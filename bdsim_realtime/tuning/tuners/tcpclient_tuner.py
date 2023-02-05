@@ -36,7 +36,9 @@ class TcpClientTuner(Tuner):
         self.sock = sock = socket.socket()
         # dont block; throw error instead
         sock.settimeout(TIMEOUT)
+        print("Connecting to bdsim_realtime.webapp server at tcp://{hostname}:{port}".format(hostname=hostname, port=port))
         sock.connect((hostname, port))  # TODO: handle failure
+        print("Connection Successful!")
         # turn sock into file-like stream for efficiency (according to micropython docs)
         self.stream = sock.makefile('rwb')
 
@@ -44,7 +46,7 @@ class TcpClientTuner(Tuner):
         self.poll = poll()
         self.poll.register(sock, POLLIN)
 
-        self.stream_app = flask.Flask('dirtywebstream2')
+        self.stream_app = flask.Flask('flask_webstreams')
         self.ip = _get_local_ip()
         self.stream_port = 7646
         self.video_streams = []

@@ -15,7 +15,7 @@ import { SignalScopeChart } from "./SignalScopeChart";
 function App() {
   const api = useApi();
   return !api ? (
-    <p>Connecting to websocket at {Api.WS_URL}</p>
+    <p>Attempting to connect to to websocket server at {Api.WS_URL}</p>
   ) : api instanceof Error ? (
     <p>Connection error: {api}</p>
   ) : (
@@ -35,7 +35,7 @@ function NodePicker({ api }: { api: Api }) {
         }
       >
         {availableNodeIPs.map((ip) => (
-          <option value={ip}>{ip}</option>
+          <option key={ip} value={ip}>{ip}</option>
         ))}
       </select>
     </label>
@@ -60,9 +60,9 @@ export function NodeInterface({ api }: { api: Api }) {
           <Row>
             <Stack isClosable={false}>
               <Content title="Parameters" isClosable={false}>
-                <div class="param-tuner">
-                  {currentNode.params.map((param) => (
-                    <ParamEditorDelegator param={param} />
+                <div className="param-tuner">
+                  {currentNode.params.map((param, idx) => (
+                    <ParamEditorDelegator key={idx} param={param} />
                   ))}
                 </div>
               </Content>
@@ -82,7 +82,7 @@ export function NodeInterface({ api }: { api: Api }) {
               </Stack>
               <Stack isClosable={false}>
                 {currentNode.signalScopes.map((scope) => (
-                  <Content title={scope.name} isClosable={false}>
+                  <Content key={scope.name} title={scope.name} isClosable={false}>
                     <SignalScopeChart scope={scope} />
                   </Content>
                 ))}
@@ -97,4 +97,4 @@ export function NodeInterface({ api }: { api: Api }) {
   );
 }
 
-render(<App />, document.body);
+render(<App />, document.querySelector('#app'));

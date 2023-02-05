@@ -1,7 +1,7 @@
 import logging
 from os import PathLike
 from threading import Thread, Lock
-from typing import Union
+from typing import Tuple, Union
 
 import numpy as np
 import flask
@@ -11,8 +11,7 @@ from bdsim.components import (
     SourceBlock,
     SinkBlock,
     FunctionBlock,
-    SubsystemBlock,
-    block,
+    SubsystemBlock
 )
 from bdsim.blocks.discrete import ZOH
 from bdsim_realtime.tuning.tuners import Tuner
@@ -22,7 +21,7 @@ from bdsim_realtime.tuning.parameter import HyperParam, RangeParam
 try:
     import cv2
 
-    @block
+    
     class Camera(SourceBlock, ZOH, TunableBlock):
         """
         :blockname:`CAMERA`
@@ -42,11 +41,15 @@ try:
 
         type = "camera"
 
+        nin = 0
+        nout = 1
+
         def __init__(
             self,
             source: Union[cv2.VideoCapture, int, str, PathLike],
             *,
             clock: Clock,
+            resolution: Tuple[int, int] = (320, 180),
             **kwargs
         ):
             """
@@ -79,9 +82,6 @@ try:
                     source = str(source)
                 self.video_capture = cv2.VideoCapture(source)
 
-            self.video_capture.set(cv2.CAP_PROP_EXPOSURE, 40)
-            self.video_capture.set(3, 320)
-            self.video_capture.set(4, 180)
 
             def set_resolution(res):
                 w, h = res
@@ -90,6 +90,8 @@ try:
                 self.video_capture.set(cv2.CAP_PROP_EXPOSURE, 40)
                 self.video_capture.set(3, 320)
                 self.video_capture.set(4, 180)
+
+            set_resolution(resolution)
 
             self.resolution = self._param(
                 "resolution",
@@ -127,7 +129,7 @@ try:
                 )
             )
 
-        def start(self, **kwargs):
+        def start(self, state, **kwargs):
             super().start(**kwargs)
             if not self.is_livestream:
                 # restart the video if it is
@@ -160,10 +162,13 @@ try:
             ), "An unknown error occured in OpenCV: camera disconnected or video file ended"
             return [frame]
 
-    @block
+    
     class CvtColor(FunctionBlock, TunableBlock):
 
         type = "cvtcolor"
+
+        nin = 1
+        nout = 1
 
         # TODO: automate 'from_', when unit system is implemented ('rgb pixel' will be a unit)
 
@@ -189,10 +194,13 @@ try:
                 ) from e
             return [converted]
 
-    @block
+    
     class InRange(FunctionBlock, TunableBlock):
 
         type = "inrange"
+
+        nin = 1
+        nout = 1
 
         def __init__(
             self, input, lower=(0, 0, 0), upper=(255, 255, 255), enable=True, **kwargs
@@ -215,9 +223,12 @@ try:
                 mask = np.ones(input.shape[:2], np.uint8)
             return [mask]
 
-    @block
+    
     class Mask(FunctionBlock):
         type = "mask"
+
+        nin = 2
+        nout = 1
 
         def __init__(self, input, **kwargs):
             super().__init__(inputs=[input], nin=2, nout=1, **kwargs)
@@ -227,7 +238,7 @@ try:
             masked = cv2.bitwise_and(input, input, mask=mask)
             return [masked]
 
-    @block
+    
     class Threshold(FunctionBlock):
 
         type = "threshold"
@@ -239,6 +250,9 @@ try:
             "tozero_inv",
             "mask",
         ]
+
+        nin = 1
+        nout = 1
         # TODO support "otsu" & "triangle"
 
         def __init__(self, input, lower, upper, method="binary", **kwargs):
@@ -310,6 +324,9 @@ try:
     class _Morphological(FunctionBlock, TunableBlock):
         type = "morphological"
 
+        nin = 1
+        nout = 1
+
         def __init__(self, input, diadic_func, kernel, iterations, enable, **kwargs):
             super().__init__(inputs=[input] if input else [], nin=1, nout=1, **kwargs)
 
@@ -328,7 +345,7 @@ try:
                 output = input
             return [output]
 
-    @block
+    
     class Erode(_Morphological):
 
         type = "erode"
@@ -345,24 +362,28 @@ try:
                 **kwargs,
             )
 
-    @block
+    
     class Dilate(_Morphological):
 
         type = "dilate"
 
-        def __init__(self, input, iterations=1, kernel=("ellipse", 3, 3), **kwargs):
+        def __init__(self, input, iterations=1, kernel=("ellipse", 3, 3), enable=False, **kwargs):
             super().__init__(
                 input,
                 diadic_func=cv2.dilate,
                 kernel=kernel,
                 iterations=iterations,
+                enable=enable,
                 **kwargs,
             )
 
-    @block
+    
     class OpenMask(SubsystemBlock, TunableBlock):
 
         type = "openmask"
+
+        nin = 1
+        nout = 1
 
         def __init__(self, input, iterations=1, kernel=("ellipse", 3, 3), **kwargs):
             super().__init__(inputs=[input], nin=1, nout=1, **kwargs)
@@ -386,10 +407,13 @@ try:
             self.dilate.inputs = eroded
             return self.dilate.output()
 
-    @block
+    
     class CloseMask(SubsystemBlock, TunableBlock):
 
         type = "closemask"
+
+        nin = 1
+        nout = 1
 
         def __init__(self, input, iterations=1, kernel=("ellipse", 3, 3), **kwargs):
             # TODO Propagate name in some way to aid debugging
@@ -412,7 +436,7 @@ try:
             self.erode.inputs = dilated
             return self.erode.output()
 
-    @block
+    
     class Blobs(FunctionBlock, TunableBlock):
         """[summary]
 
@@ -429,6 +453,9 @@ try:
         some SimpleBlobDetector features, such as color filtering, don't make sense (always 255/0 for binary image), so was omitted.
         See: https://github.com/opencv/opencv/blob/e5e767abc1314f918a848e0b912dc9574c19bfaf/modules/features2d/src/blobdetector.cpp#L275
         """
+
+        nin = 1
+        nout = 1
 
         type = "blobs"
 
@@ -522,7 +549,7 @@ try:
             keypoints = self.detector.detect(input)
             return [keypoints[: self.top_k] if self.top_k else keypoints]
 
-    @block
+    
     class Display(SinkBlock):
         """
         :blockname:`DISPLAY`
@@ -538,6 +565,9 @@ try:
         | A(H, W, C)  |         |         |
         +-------------+---------+---------+
         """
+
+        nin = 1
+        nout = 0
 
         type = "display"
 
@@ -559,9 +589,9 @@ try:
 
             if self.show_fps:
                 self.fps = 30  # seems a decent init value
-                self.last_t = None
+                self.prev_t = None
 
-        def start(self):
+        def start(self, state):
             # TODO: web-stream via HTTP stream over raw sockets so it'll work in micropython
             # OR/AND, do so over websockets without jpeg encoding
             if self.web_stream_host is not None:
@@ -620,7 +650,7 @@ try:
             [input] = self.inputs
             if self.show_fps:
                 frequency = (
-                    1 / (self.bd.state.t - self.last_t) if self.last_t else self.fps
+                    1 / (self.bd.state.t - self.prev_t) if self.prev_t else self.fps
                 )
                 # moving average formula
                 self.fps = (
@@ -634,7 +664,7 @@ try:
                     1,
                     self.FPS_COLOR if len(input.shape) == 3 else 255,
                 )  # use white if it's grayscale
-                self.last_t = self.bd.state.t
+                self.prev_t = self.bd.state.t
 
             # just quick and dirty for now
             if self.web_stream_host:
@@ -651,13 +681,16 @@ try:
                 # cv2 needs this to actually show. this blocking maybe matplotlib could do it instead.
                 cv2.waitKey(1)
 
-        def done(self):
+        def done(self, block):
             if not self.web_stream_host:
                 # TODO: Check if overkill to ensure that self.name never changes?
                 cv2.destroyWindow(self.name)
 
-    @block
+    
     class DrawKeypoints(FunctionBlock):
+
+        nin = 2
+        nout = 1
 
         type = "drawkeypoints"
 

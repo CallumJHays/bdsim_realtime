@@ -46,7 +46,7 @@ export default function Delegator({
   ) as any;
 
   return (
-    <div class="param-editor">
+    <div className="param-editor">
       <Editor
         param={showLabel ? param : { ...param, name: "" }}
         onChange={(val) => setParam({ ...param, val })}

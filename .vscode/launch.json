@@ -10,9 +10,15 @@
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
-      "env": {
-        "BDSIMPATH": "${workspaceRoot}/bdsim_realtime/blocks"
-      }
+      "justMyCode": false
+    },
+    {
+      "name": "BDSim Realtime Webapp",
+      "type": "python",
+      "request": "launch",
+      "module": "bdsim_realtime.webapp.server",
+      "console": "integratedTerminal",
+      "justMyCode": false
     }
   ]
 }

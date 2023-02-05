@@ -1,11 +1,11 @@
 import math
 
-from bdsim.components import SourceBlock, block
+from bdsim.components import SourceBlock
 
 from bdsim_realtime.tuning.tunable_block import TunableBlock
 
 
-@block
+
 class Tunable_Waveform(SourceBlock, TunableBlock):
     """
     :blockname:`WAVEFORM`
@@ -23,6 +23,9 @@ class Tunable_Waveform(SourceBlock, TunableBlock):
     """
 
     type = "waveform"
+
+    nin = 0
+    nout = 1
 
     def __init__(self, wave='square',
                  freq=1, unit='Hz', phase=0, amplitude=1, offset=0,

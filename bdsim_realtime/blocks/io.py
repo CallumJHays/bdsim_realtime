@@ -19,7 +19,7 @@ from typing_extensions import Literal
 
 
 # TODO: write an abstract implementation and derive from it
-# @block
+# 
 # class DigitalIn_ESP32(ZOH):
     
 #     def __init__(
@@ -44,7 +44,7 @@ from typing_extensions import Literal
 #     def output(self):
 #         return [self.pin()]
 
-# @block
+# 
 # class DigitalOut_ESP32(SinkBlock, ClockedBlock):
 #     "TODO: not finished or tested. probably wrong."
 
@@ -75,7 +75,7 @@ from typing_extensions import Literal
 #         self.pin(self.inputs[0])
 
 
-# @block
+# 
 # class ADC_ESP32(ADC):
 
 #     # available attenuation configs result in these
@@ -133,7 +133,7 @@ from typing_extensions import Literal
 
 
 # available on ESP32 uPy? ESP32 does have two...
-# @block
+# 
 # class DAC(ZOH):
 
 #     def __init__(
@@ -144,7 +144,7 @@ from typing_extensions import Literal
 #         pin: int,
 
 #     )
-# @block
+# 
 # class PWM_ESP32(PWM):
 
 #     def __init__(

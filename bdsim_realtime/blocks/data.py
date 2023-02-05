@@ -3,7 +3,7 @@ from io import IOBase
 
 import msgpack
 from bdsim.blocks.discrete import ZOH
-from bdsim.components import Block, Clock, Plug, SinkBlock, SourceBlock, block, ClockedBlock
+from bdsim.components import Block, Clock, Plug, SinkBlock, SourceBlock, ClockedBlock
 
 
 # pivate helpers
@@ -17,8 +17,11 @@ def _recv_msgpack(transport: IOBase) -> Any:
     data_len = int.from_bytes(transport.read(_PKT_LEN_SIZE), 'big')
     return msgpack.loads(transport.read(data_len))
 
-@block
+
 class DataSender(SinkBlock, ClockedBlock):
+
+    nin = -1
+    nout = 0
 
     def __init__(self, receiver: IOBase, *inputs: Union[Block, Plug], nin: int, clock: Clock, **kwargs: Any):
         super().__init__(nin=nin, nout=0, inputs=inputs, clock=clock, **kwargs)
@@ -49,9 +52,12 @@ class DataSender(SinkBlock, ClockedBlock):
     def output(self, t: float):
         return []
 
-@block
+
 class DataReceiver(SourceBlock, ZOH):
     # TODO: Should only work with bdsim-realtime
+
+    nin = 0
+    nout = -1
 
     def __init__(self, sender: IOBase, *, nout: int, clock: Clock, **kwargs: Any):
         super().__init__(nin=0, nout=nout, clock=clock, **kwargs)
@@ -81,8 +87,11 @@ class DataReceiver(SourceBlock, ZOH):
 
 
 
-@block
+
 class CSV(SinkBlock):
+
+    nin = -1
+    nout = 0
 
     def __init__(
         self,

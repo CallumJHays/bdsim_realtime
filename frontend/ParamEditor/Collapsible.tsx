@@ -13,7 +13,7 @@ export default function Collapsible({
   return (
     <>
       <button
-        class={
+        className={
           "collapsible-button" +
           (active ? " active" : "") +
           (disabled ? " disabled" : "")
@@ -23,7 +23,7 @@ export default function Collapsible({
       >
         {title}
       </button>
-      <div class={"collapsible-panel" + (active ? " active" : "")}>
+      <div className={"collapsible-panel" + (active ? " active" : "")}>
         {children}
       </div>
     </>

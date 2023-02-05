@@ -44,11 +44,11 @@ export default function NumParamEditor({
   return (
     <>
       <div>{param.name}</div>
-      <div class="slider-wrapper">
-        <svg class="slider" width={230} height={47}>
+      <div className="slider-wrapper">
+        <svg className="slider" width={230} height={47}>
           <g transform="translate(12, 6)" ref={sliderContainer} />
         </svg>
-        <label class="slider-value">{formatNum(val)}</label>
+        <label className="slider-value">{formatNum(val)}</label>
       </div>
     </>
   );

@@ -22,7 +22,7 @@ setup(
 
     name='bdsim_realtime',
 
-    version="0.0.1",
+    version="1.0.0",
 
     description='Real-time execution and remote monitoring and tuning of BDSim Block-Diagrams for modelling and control of Dynamical Systems',
 
@@ -69,14 +69,23 @@ setup(
     include_package_data=True,
     package_data={
         # TODO
-        '': recursively_list_all_files('bdsim_realtime/webapp/client')
+        '': recursively_list_all_files('frontend/dist')
     },
 
-    install_requires=['websockets', 'numpy', 'typing_extensions', 'sanic', 'spatialmath-python', 'msgpack', 'bdsim'],
+    install_requires=[
+        'numpy',
+        'typing_extensions',
+        'sanic>=22.0.0',
+        'msgpack',
+        'spatialmath-python',
+        # bdsim 1.0.1 (not yet released)
+        'bdsim @ git+https://github.com/petercorke/bdsim@e9b5691c5f2c43ec0f7759268c9d00da4af8adfd#egg=bdsim',
+        'flask'
+    ],
 
     
     extras_require={
-        'opencv': 'opencv-python' # if you want to use computer-vision blocks
+        'opencv': 'opencv-python>=2.0.0' # if you want to use computer-vision blocks
     }
 
 )

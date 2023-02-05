@@ -18,10 +18,9 @@ Note: under heavy development (pre-alpha). These instructions will not fully wor
 ## Installation
 
 ```bash
-pip i -r requirements.txt # use Python >= 3.6
-npm i # install JS deps
-npm run build # build optimized bundle
+pip install "bdsim_realtime[opencv]" # opencv optional
 ```
+
 
 ## Usage
 
@@ -31,36 +30,78 @@ First, start the server and keep it running:
 python -m bdsim_realtime.webapp
 ```
 
-Next, (in a separate terminal) install [BDSim](httpsserver://github.com/petercorke/bdsim) with `pip install bdsim`. Then define a block-diagram and link it to the tuner:
+Then, add and run your bdsim script, 
 
 ```python
-# demo.py
 import bdsim, numpy as np
-from bdsim_realtime
+import bdsim_realtime
 
 # setup block-diagram and tuner client
-bd = bdsim.BlockDiagram()
+bd = bdsim.BDSim(packages="bdsim_realtime").blockdiagram()
 
 # All TunableBlocks within this context manager will register their parameters swith the Tuner
-with bdsim.tuning.tuners.TcpClientTuner() as tuner:
+with bdsim_realtime.tuning.tuners.TcpClientTuner() as tuner:
     # use first local camera available
-    bgr = bd.CAMERA(0)
+    clock = bd.clock(24, unit='Hz')
+    bgr = bd.CAMERA(0, clock=clock)
 
     # display in web stream
-    bd.DISPLAY(bgr, name="BGR Stream", web_stream_host=tuner)
+    bd.DISPLAY(bgr, name="BGR Stream", web_stream_host=tuner, show_fps=True)
 
     # tune system parameters in the web editor
     gain = tuner.param(1, min=0, max=100)
 
     # stream some telemetry data (random for demo)
     data = bd.FUNCTION(
-        lambda: (gain * np.random.rand(3)).tolist(),
+        lambda _: (gain.val * np.random.rand(3)).tolist(),
+        nin=1, # unused import required here to use function as a Clocked Source Block
         nout=3
     )
-    bd.SCOPE(data[:], nin=3, tuner=tuner)
+    bd.connect(bgr, data)
+
+    bd.TUNERSCOPE(
+        data[0], data[1], data[2],
+        nin=3,
+        labels=['x', 'y', 'z'],
+        name='Random Data',
+        tuner=tuner)
 
 bd.compile() # perform verification
-bd.run_realtime() # run forever
+bdsim_realtime.run(bd, tuner=tuner) # run forever
 ```
 
-Now access the tuner at [http://localhost:8080]()
+Now access the tuner at [http://localhost:8080](http://localhost:8080)
+
+
+## Development
+
+### Setup
+
+
+```bash
+python -m venv .venv # create venv
+source .venv/bin/activate # activate venv
+
+pip install -e ".[opencv]" # install in editable symlink mode
+npm i # install JS deps
+```
+
+#### Frontend
+
+```
+npm run dev # run hot-reloaded app
+```
+
+#### Backend
+
+Same as non-development version. Run:
+
+```
+python -m bdsim_realtime.webapp
+```
+
+And then run your example / test script:
+
+```
+python examples/blob_detector_tuner.py
+```

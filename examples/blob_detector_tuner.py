@@ -2,7 +2,7 @@ import cv2
 import bdsim
 import bdsim_realtime
 
-bd = bdsim.BDSim().blockdiagram()
+bd = bdsim.BDSim(packages='bdsim_realtime').blockdiagram()
 
 with bdsim_realtime.tuning.TcpClientTuner() as tuner:
     # setup hsv stream
@@ -50,12 +50,15 @@ with bdsim_realtime.tuning.TcpClientTuner() as tuner:
 
 
     # pull out stats to track
-    picker = bd.FUNCTION(biggest_blob_stats, blobs, nout=3)
+    picker = bd.FUNCTION(biggest_blob_stats, nin=1, nout=3)
+    bd.connect(blobs, picker)
 
     # plot biggest blob trajectory over time
     # display it through the tuner app
     blob_scope = bd.TUNERSCOPE(
-        picker[0:3],
+        picker[0],
+        picker[1],
+        picker[2],
         nin=3,
         labels=['BlobX', 'BlobY', 'BlobSize'],
         name='Blob vs Time',

@@ -1,12 +1,12 @@
 from typing import TYPE_CHECKING
 
-from bdsim.components import SinkBlock, block
+from bdsim.components import SinkBlock
 
 if TYPE_CHECKING:
     from ..tuning import Tuner
     
 
-@block
+
 class TunerScope(SinkBlock):
     """
     :blockname:`TUNERSCOPE`
@@ -23,6 +23,9 @@ class TunerScope(SinkBlock):
        | A(N,)  |         |         | 
        +--------+---------+---------+
     """
+
+    nin = -1
+    nout = 0
 
     def __init__(
         self,
