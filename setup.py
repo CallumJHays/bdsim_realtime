@@ -22,7 +22,7 @@ setup(
 
     name='bdsim_realtime',
 
-    version="1.0.0",
+    version="1.0.1",
 
     description='Real-time execution and remote monitoring and tuning of BDSim Block-Diagrams for modelling and control of Dynamical Systems',
 
@@ -37,8 +37,8 @@ setup(
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
-        'Intended Audience :: Engineers',
-        'Intended Audience :: Robotics',
+        'Intended Audience :: Education',
+        'Intended Audience :: Science/Research',
         # Pick your license as you wish (should match "license" above)
         'License :: OSI Approved :: MIT License',
 
