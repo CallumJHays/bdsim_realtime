@@ -18,7 +18,7 @@ Note: under heavy development (pre-alpha). These instructions will not fully wor
 ## Installation
 
 ```bash
-pip install "bdsim_realtime[opencv]" # opencv optional
+pip install "git+https://github.com/CallumJHays/bdsim_realtime#egg=bdsim_realtime[opencv]"
 ```
 
 
